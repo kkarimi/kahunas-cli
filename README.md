@@ -82,7 +82,7 @@ Raw output (`--raw`) prints the API response only.
 
 ### Workout events (dates)
 
-To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is enriched with program details (if available).
+To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is enriched with the full program payload (best effort; falls back to cached summary if needed).
 
 ```bash
 node dist/cli.js workout events --user <user-uuid>
@@ -144,3 +144,4 @@ pnpm exec playwright install chromium
 
 - This CLI uses the same APIs the web app uses; tokens can expire quickly.
 - `auth login` is the most reliable way to refresh the token.
+- `workout events` relies on session cookies captured during `auth login`.
