@@ -9,6 +9,7 @@
   "scripts": {
     "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --external playwright --tsconfig tsconfig.json",
     "kahunas": "node dist/cli.js",
+    "lint": "pnpm typecheck",
     "prepublishOnly": "pnpm build",
     "start": "node dist/cli.js",
     "test": "vitest run",
