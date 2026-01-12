@@ -9,6 +9,7 @@
   "scripts": {
     "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --external playwright --tsconfig tsconfig.json",
     "kahunas": "node dist/cli.js",
+    "prepublishOnly": "pnpm build",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -16,6 +17,10 @@
   "keywords": [],
   "author": "Nima Karimi",
   "license": "ISC",
+  "files": [
+    "dist/cli.js",
+    "README.md"
+  ],
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
     "playwright": "^1.49.1"

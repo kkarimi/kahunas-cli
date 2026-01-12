@@ -2,6 +2,8 @@
 
 A TypeScript CLI for Kahunas (kahunas.io) to fetch check-ins and workouts.
 
+![Kahunas CLI screenshot](ai-screenshot.png)
+
 ## Quick start
 
 1) Install dependencies and build:
@@ -146,6 +148,14 @@ Run the unit tests with:
 
 ```bash
 pnpm test
+```
+
+## Publishing
+
+The npm package is built from `dist/cli.js`. Publishing runs the build automatically:
+
+```bash
+pnpm publish
 ```
 
 ## Notes
