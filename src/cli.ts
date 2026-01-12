@@ -417,6 +417,16 @@ function formatWorkoutSummary(plan: WorkoutPlan): string {
   return `${title}${days} (${uuid})`;
 }
 
+function buildWorkoutPlanIndex(plans: WorkoutPlan[]): Record<string, WorkoutPlan> {
+  const index: Record<string, WorkoutPlan> = {};
+  for (const plan of plans) {
+    if (plan.uuid) {
+      index[plan.uuid] = plan;
+    }
+  }
+  return index;
+}
+
 function printResponse(response: ApiResponse, rawOutput: boolean): void {
   if (rawOutput) {
     console.log(response.text);
@@ -449,7 +459,7 @@ function isTokenExpiredResponse(payload: unknown): boolean {
 }
 
 function printUsage(): void {
-  console.log(`kahunas - CLI for Kahunas API\n\nUsage:\n  kahunas auth set <token> [--base-url URL] [--csrf CSRF] [--web-base-url URL] [--cookie COOKIE] [--csrf-cookie VALUE]\n  kahunas auth token [--csrf CSRF] [--cookie COOKIE] [--csrf-cookie VALUE] [--web-base-url URL] [--raw]\n  kahunas auth login [--web-base-url URL] [--headless] [--raw]\n  kahunas auth status [--token TOKEN] [--base-url URL] [--auto-login] [--headless]\n  kahunas auth show\n  kahunas checkins list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout pick [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout latest [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout events [--user UUID] [--timezone TZ] [--program UUID] [--workout UUID] [--raw] [--no-auto-login] [--headless]\n  kahunas workout sync [--headless]\n  kahunas workout program <id> [--csrf CSRF] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n\nEnv:\n  KAHUNAS_TOKEN=...\n  KAHUNAS_CSRF=...\n  KAHUNAS_CSRF_COOKIE=...\n  KAHUNAS_COOKIE=...\n  KAHUNAS_WEB_BASE_URL=...\n  KAHUNAS_USER_UUID=...\n\nConfig:\n  ${CONFIG_PATH}`);
+  console.log(`kahunas - CLI for Kahunas API\n\nUsage:\n  kahunas auth set <token> [--base-url URL] [--csrf CSRF] [--web-base-url URL] [--cookie COOKIE] [--csrf-cookie VALUE]\n  kahunas auth token [--csrf CSRF] [--cookie COOKIE] [--csrf-cookie VALUE] [--web-base-url URL] [--raw]\n  kahunas auth login [--web-base-url URL] [--headless] [--raw]\n  kahunas auth status [--token TOKEN] [--base-url URL] [--auto-login] [--headless]\n  kahunas auth show\n  kahunas checkins list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout pick [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout latest [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout events [--user UUID] [--timezone TZ] [--program UUID] [--workout UUID] [--minimal] [--raw] [--no-auto-login] [--headless]\n  kahunas workout sync [--headless]\n  kahunas workout program <id> [--csrf CSRF] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n\nEnv:\n  KAHUNAS_TOKEN=...\n  KAHUNAS_CSRF=...\n  KAHUNAS_CSRF_COOKIE=...\n  KAHUNAS_COOKIE=...\n  KAHUNAS_WEB_BASE_URL=...\n  KAHUNAS_USER_UUID=...\n\nConfig:\n  ${CONFIG_PATH}`);
 }
 
 function askQuestion(prompt: string): Promise<string> {
@@ -1108,6 +1118,8 @@ async function handleWorkout(positionals: string[], options: Record<string, stri
       writeConfig({ ...config, userUuid });
     }
 
+    const minimal = isFlagEnabled(options, "minimal");
+
     let csrfToken = resolveCsrfToken(options, config);
     let csrfCookie = resolveCsrfCookie(options, config);
     let authCookie = resolveAuthCookie(options, config);
@@ -1223,7 +1235,91 @@ async function handleWorkout(positionals: string[], options: Record<string, stri
       return aStart - bStart;
     });
 
-    console.log(JSON.stringify(sorted, null, 2));
+    if (minimal) {
+      console.log(JSON.stringify(sorted, null, 2));
+      return;
+    }
+
+    let programIndex: Record<string, WorkoutPlan> | undefined;
+    const cache = readWorkoutCache();
+    let plans = cache?.plans ?? [];
+    try {
+      await ensureToken();
+      const url = new URL("/api/v1/workoutprogram", baseUrl);
+      url.searchParams.set("page", "1");
+      url.searchParams.set("rpp", "100");
+      let response = await getWithAuth(url.pathname + url.search, token!, baseUrl);
+      if (autoLogin && isTokenExpiredResponse(response.json)) {
+        token = await loginAndPersist(options, config, "silent");
+        response = await getWithAuth(url.pathname + url.search, token, baseUrl);
+      }
+      if (response.ok) {
+        const fromApi = extractWorkoutPlans(response.json);
+        plans = mergeWorkoutPlans(fromApi, plans);
+      }
+    } catch {
+      // Best-effort enrichment only.
+    }
+    if (plans.length > 0) {
+      programIndex = buildWorkoutPlanIndex(plans);
+    }
+
+    const programDetails: Record<string, unknown> = {};
+    const programIds = Array.from(
+      new Set(
+        sorted
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return undefined;
+            }
+            const record = entry as Record<string, unknown>;
+            return typeof record.program === "string" ? record.program : undefined;
+          })
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    for (const programId of programIds) {
+      try {
+        await ensureToken();
+        let response = await fetchWorkoutProgram(token!, baseUrl, programId, effectiveCsrfToken);
+        if (autoLogin && isTokenExpiredResponse(response.json)) {
+          token = await loginAndPersist(options, config, "silent");
+          response = await fetchWorkoutProgram(token, baseUrl, programId, effectiveCsrfToken);
+        }
+        if (response.ok && response.json && typeof response.json === "object") {
+          const payload = response.json as Record<string, unknown>;
+          const data = payload.data;
+          if (data && typeof data === "object") {
+            const plan = (data as Record<string, unknown>).workout_plan;
+            if (plan) {
+              programDetails[programId] = plan;
+              continue;
+            }
+          }
+          programDetails[programId] = payload;
+          continue;
+        }
+      } catch {
+        // Ignore fetch failures and fall back to cached index.
+      }
+      programDetails[programId] = programIndex?.[programId] ?? null;
+    }
+
+    const enriched = sorted.map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return entry;
+      }
+      const record = entry as Record<string, unknown>;
+      const programUuid = typeof record.program === "string" ? record.program : undefined;
+      const program = programUuid ? programDetails[programUuid] : undefined;
+      return {
+        ...record,
+        program_details: program ?? null
+      };
+    });
+
+    console.log(JSON.stringify(enriched, null, 2));
     return;
   }
 

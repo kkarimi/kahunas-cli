@@ -25,6 +25,13 @@ node dist/cli.js workout list
 node dist/cli.js workout pick
 ```
 
+You can also use the pnpm shortcut:
+
+```bash
+pnpm kahunas -- checkins list
+pnpm kahunas -- workout events
+```
+
 ## Commands
 
 ### Auth
@@ -75,10 +82,16 @@ Raw output (`--raw`) prints the API response only.
 
 ### Workout events (dates)
 
-To see when workouts happened, the calendar endpoint returns log events with timestamps:
+To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is enriched with program details (if available).
 
 ```bash
 node dist/cli.js workout events --user <user-uuid>
+```
+
+Or via pnpm:
+
+```bash
+pnpm kahunas -- workout events
 ```
 
 Default timezone is `Europe/London`. Override with `--timezone`.
@@ -89,6 +102,8 @@ You can filter by program or workout UUID:
 node dist/cli.js workout events --program <program-uuid>
 node dist/cli.js workout events --workout <workout-uuid>
 ```
+
+Use `--minimal` to return the raw event objects without program enrichment.
 
 The user UUID is saved automatically after `checkins list`, or you can set it:
 

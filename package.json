@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "kahunas": "node dist/cli.js",
     "start": "node dist/cli.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
