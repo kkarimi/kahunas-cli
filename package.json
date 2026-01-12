@@ -1,0 +1,28 @@
+{
+  "name": "kahunas-cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/cli.js",
+  "bin": {
+    "kahunas": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.25.0",
+  "dependencies": {
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
