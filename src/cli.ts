@@ -22,6 +22,28 @@ type ParsedArgs = {
   options: Record<string, string>;
 };
 
+type ApiResponse = {
+  ok: boolean;
+  status: number;
+  text: string;
+  json?: unknown;
+};
+
+type LoginResult = {
+  token: string;
+  csrfToken?: string;
+  webBaseUrl: string;
+  raw?: string;
+};
+
+type WorkoutPlan = {
+  uuid?: string;
+  title?: string;
+  updated_at_utc?: number;
+  created_at_utc?: number;
+  days?: number;
+};
+
 function parseArgs(argv: string[]): ParsedArgs {
   const positionals: string[] = [];
   const options: Record<string, string> = {};
@@ -56,6 +78,16 @@ function parseArgs(argv: string[]): ParsedArgs {
 function isFlagEnabled(options: Record<string, string>, name: string): boolean {
   const value = options[name];
   return value === "true" || value === "1" || value === "yes";
+}
+
+function shouldAutoLogin(options: Record<string, string>, defaultValue: boolean): boolean {
+  if (isFlagEnabled(options, "auto-login")) {
+    return true;
+  }
+  if (isFlagEnabled(options, "no-auto-login")) {
+    return false;
+  }
+  return defaultValue;
 }
 
 function isLikelyAuthToken(value: string): boolean {
@@ -156,18 +188,104 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+function parseJsonText(text: string): unknown | undefined {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractWorkoutPlans(payload: unknown): WorkoutPlan[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+  const record = payload as Record<string, unknown>;
+  const data = record.data;
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+  const workoutPlan = (data as Record<string, unknown>).workout_plan;
+  if (!Array.isArray(workoutPlan)) {
+    return [];
+  }
+  return workoutPlan
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const plan = entry as Record<string, unknown>;
+      return {
+        uuid: typeof plan.uuid === "string" ? plan.uuid : undefined,
+        title: typeof plan.title === "string" ? plan.title : undefined,
+        updated_at_utc: typeof plan.updated_at_utc === "number" ? plan.updated_at_utc : undefined,
+        created_at_utc: typeof plan.created_at_utc === "number" ? plan.created_at_utc : undefined,
+        days: typeof plan.days === "number" ? plan.days : undefined
+      };
+    });
+}
+
+function pickLatestWorkout(plans: WorkoutPlan[]): WorkoutPlan {
+  const sorted = [...plans].sort((a, b) => {
+    const aValue = a.updated_at_utc ?? a.created_at_utc ?? 0;
+    const bValue = b.updated_at_utc ?? b.created_at_utc ?? 0;
+    return bValue - aValue;
+  });
+  return sorted[0];
+}
+
+function formatWorkoutSummary(plan: WorkoutPlan): string {
+  const title = plan.title ?? "Untitled";
+  const uuid = plan.uuid ?? "unknown";
+  const days = plan.days ? ` - ${plan.days} days` : "";
+  return `${title}${days} (${uuid})`;
+}
+
+function printResponse(response: ApiResponse, rawOutput: boolean): void {
+  if (rawOutput) {
+    console.log(response.text);
+    return;
+  }
+
+  if (response.json !== undefined) {
+    console.log(JSON.stringify(response.json, null, 2));
+    return;
+  }
+
+  console.log(response.text);
+}
+
+function isTokenExpiredResponse(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const record = payload as Record<string, unknown>;
+  if (record.token_expired === 1 || record.token_expired === true) {
+    return true;
+  }
+  if (record.status === -3) {
+    return true;
+  }
+  if (typeof record.message === "string" && record.message.toLowerCase().includes("login")) {
+    return true;
+  }
+  return false;
+}
+
 function printUsage(): void {
-  console.log(`kahunas - CLI for Kahunas API\n\nUsage:\n  kahunas auth set <token> [--base-url URL] [--csrf CSRF] [--web-base-url URL] [--cookie COOKIE] [--csrf-cookie VALUE]\n  kahunas auth token [--csrf CSRF] [--cookie COOKIE] [--csrf-cookie VALUE] [--web-base-url URL] [--raw]\n  kahunas auth login [--web-base-url URL] [--headless] [--raw]\n  kahunas auth show\n  kahunas checkins list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw]\n  kahunas workout program <id> [--csrf CSRF] [--token TOKEN] [--base-url URL] [--raw]\n\nEnv:\n  KAHUNAS_TOKEN=...\n  KAHUNAS_CSRF=...\n  KAHUNAS_CSRF_COOKIE=...\n  KAHUNAS_COOKIE=...\n  KAHUNAS_WEB_BASE_URL=...\n\nConfig:\n  ${CONFIG_PATH}`);
+  console.log(`kahunas - CLI for Kahunas API\n\nUsage:\n  kahunas auth set <token> [--base-url URL] [--csrf CSRF] [--web-base-url URL] [--cookie COOKIE] [--csrf-cookie VALUE]\n  kahunas auth token [--csrf CSRF] [--cookie COOKIE] [--csrf-cookie VALUE] [--web-base-url URL] [--raw]\n  kahunas auth login [--web-base-url URL] [--headless] [--raw]\n  kahunas auth status [--token TOKEN] [--base-url URL] [--auto-login] [--headless]\n  kahunas auth show\n  kahunas checkins list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout pick [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout latest [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout program <id> [--csrf CSRF] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n\nEnv:\n  KAHUNAS_TOKEN=...\n  KAHUNAS_CSRF=...\n  KAHUNAS_CSRF_COOKIE=...\n  KAHUNAS_COOKIE=...\n  KAHUNAS_WEB_BASE_URL=...\n\nConfig:\n  ${CONFIG_PATH}`);
+}
+
+function askQuestion(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
 function waitForEnter(prompt: string): Promise<void> {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(prompt, () => {
-      rl.close();
-      resolve();
-    });
-  });
+  return askQuestion(prompt).then(() => undefined);
 }
 
 function extractToken(text: string): string | undefined {
@@ -178,6 +296,68 @@ function extractToken(text: string): string | undefined {
     const trimmed = text.trim();
     return trimmed ? trimmed : undefined;
   }
+}
+
+async function postJson(
+  pathName: string,
+  token: string,
+  baseUrl: string,
+  body: Record<string, unknown>
+): Promise<ApiResponse> {
+  const url = new URL(pathName, baseUrl).toString();
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "auth-user-token": token,
+      origin: "https://kahunas.io",
+      referer: "https://kahunas.io/"
+    },
+    body: JSON.stringify(body)
+  });
+
+  const text = await response.text();
+  return {
+    ok: response.ok,
+    status: response.status,
+    text,
+    json: parseJsonText(text)
+  };
+}
+
+async function getWithAuth(pathName: string, token: string, baseUrl: string): Promise<ApiResponse> {
+  const url = new URL(pathName, baseUrl).toString();
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      accept: "*/*",
+      "auth-user-token": token,
+      origin: "https://kahunas.io",
+      referer: "https://kahunas.io/"
+    }
+  });
+
+  const text = await response.text();
+  return {
+    ok: response.ok,
+    status: response.status,
+    text,
+    json: parseJsonText(text)
+  };
+}
+
+async function fetchWorkoutProgram(
+  token: string,
+  baseUrl: string,
+  programId: string,
+  csrfToken?: string
+): Promise<ApiResponse> {
+  const url = new URL(`/api/v1/workoutprogram/${programId}`, baseUrl);
+  if (csrfToken) {
+    url.searchParams.set("csrf_kahunas_token", csrfToken);
+  }
+  return getWithAuth(url.pathname + url.search, token, baseUrl);
 }
 
 async function fetchAuthToken(
@@ -208,77 +388,112 @@ async function fetchAuthToken(
   return { token: extractToken(text), raw: text };
 }
 
-async function requestJson(
-  pathName: string,
-  token: string,
-  baseUrl: string,
-  body: Record<string, unknown>,
-  rawOutput: boolean
-): Promise<void> {
-  const url = new URL(pathName, baseUrl).toString();
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "auth-user-token": token,
-      origin: "https://kahunas.io",
-      referer: "https://kahunas.io/"
-    },
-    body: JSON.stringify(body)
+async function loginWithBrowser(
+  options: Record<string, string>,
+  config: Config
+): Promise<LoginResult> {
+  const webBaseUrl = resolveWebBaseUrl(options, config);
+  const headless = isFlagEnabled(options, "headless");
+
+  const playwright = await import("playwright");
+  const browser = await playwright.chromium.launch({ headless });
+  const context = await browser.newContext();
+  let observedToken: string | undefined;
+  const recordToken = (candidate: string | undefined): void => {
+    if (!candidate || observedToken) {
+      return;
+    }
+    if (isLikelyAuthToken(candidate)) {
+      observedToken = candidate;
+    }
+  };
+
+  context.on("request", (request) => {
+    const headers = request.headers();
+    recordToken(headers["auth-user-token"]);
   });
 
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} ${response.statusText}: ${text}`);
-  }
-
-  if (rawOutput) {
-    console.log(text);
-    return;
-  }
-
   try {
-    const data = JSON.parse(text) as unknown;
-    console.log(JSON.stringify(data, null, 2));
-  } catch {
-    console.log(text);
+    const page = await context.newPage();
+    const webOrigin = new URL(webBaseUrl).origin;
+    await page.goto(`${webOrigin}/dashboard`, { waitUntil: "domcontentloaded" });
+
+    await waitForEnter("Finish logging in, then press Enter to continue...");
+
+    if (!observedToken) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1500);
+    }
+
+    if (!observedToken) {
+      const storageDump = await page.evaluate(() => {
+        const localEntries = Object.entries(localStorage);
+        const sessionEntries = Object.entries(sessionStorage);
+        return { localEntries, sessionEntries };
+      });
+      for (const [, value] of storageDump.localEntries) {
+        recordToken(extractToken(value));
+      }
+      for (const [, value] of storageDump.sessionEntries) {
+        recordToken(extractToken(value));
+      }
+    }
+
+    const cookies = await context.cookies(webOrigin);
+    const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+    const csrfCookie = cookies.find((cookie) => cookie.name === "csrf_kahunas_cookie_token")?.value;
+    const csrfToken = resolveCsrfToken(options, config) ?? csrfCookie;
+
+    let raw: string | undefined;
+    if (!observedToken) {
+      if (!csrfToken) {
+        throw new Error("Missing CSRF token after login. Try again or provide --csrf.");
+      }
+      if (!cookieHeader) {
+        throw new Error("Missing cookies after login. Try again.");
+      }
+      const { token: extractedToken, raw: fetchedRaw } = await fetchAuthToken(
+        csrfToken,
+        cookieHeader,
+        webBaseUrl
+      );
+      recordToken(extractedToken);
+      raw = fetchedRaw;
+    }
+
+    if (!observedToken) {
+      throw new Error("Unable to extract auth token after login.");
+    }
+
+    return { token: observedToken, csrfToken, webBaseUrl, raw };
+  } finally {
+    await browser.close();
   }
 }
 
-async function requestText(
-  pathName: string,
-  token: string,
-  baseUrl: string,
-  rawOutput: boolean
-): Promise<void> {
-  const url = new URL(pathName, baseUrl).toString();
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      accept: "*/*",
-      "auth-user-token": token,
-      origin: "https://kahunas.io",
-      referer: "https://kahunas.io/"
+async function loginAndPersist(
+  options: Record<string, string>,
+  config: Config,
+  outputMode: "silent" | "token" | "raw"
+): Promise<string> {
+  const result = await loginWithBrowser(options, config);
+  const nextConfig: Config = {
+    ...config,
+    token: result.token,
+    webBaseUrl: result.webBaseUrl
+  };
+  if (result.csrfToken) {
+    nextConfig.csrfToken = result.csrfToken;
+  }
+  writeConfig(nextConfig);
+  if (outputMode !== "silent") {
+    if (outputMode === "raw") {
+      console.log(result.raw ?? result.token);
+    } else {
+      console.log(result.token);
     }
-  });
-
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} ${response.statusText}: ${text}`);
   }
-
-  if (rawOutput) {
-    console.log(text);
-    return;
-  }
-
-  try {
-    const data = JSON.parse(text) as unknown;
-    console.log(JSON.stringify(data, null, 2));
-  } catch {
-    console.log(text);
-  }
+  return result.token;
 }
 
 async function handleAuth(positionals: string[], options: Record<string, string>): Promise<void> {
@@ -361,94 +576,41 @@ async function handleAuth(positionals: string[], options: Record<string, string>
 
   if (action === "login") {
     const config = readConfig();
-    const webBaseUrl = resolveWebBaseUrl(options, config);
-    const headless = isFlagEnabled(options, "headless");
     const rawOutput = isFlagEnabled(options, "raw");
+    const outputMode = rawOutput ? "raw" : "token";
+    await loginAndPersist(options, config, outputMode);
+    return;
+  }
 
-    const playwright = await import("playwright");
-    const browser = await playwright.chromium.launch({ headless });
-    const context = await browser.newContext();
-    let observedToken: string | undefined;
-    const recordToken = (candidate: string | undefined): void => {
-      if (!candidate) {
-        return;
+  if (action === "status") {
+    const config = readConfig();
+    const autoLogin = shouldAutoLogin(options, false);
+    let token = resolveToken(options, config);
+    if (!token) {
+      if (autoLogin) {
+        token = await loginAndPersist(options, config, "silent");
+      } else {
+        throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
       }
-      if (observedToken) {
-        return;
-      }
-      if (isLikelyAuthToken(candidate)) {
-        observedToken = candidate;
-      }
-    };
-    context.on("request", (request) => {
-      const headers = request.headers();
-      recordToken(headers["auth-user-token"]);
-    });
-
-    try {
-      const page = await context.newPage();
-      const webOrigin = new URL(webBaseUrl).origin;
-      await page.goto(`${webOrigin}/dashboard`, { waitUntil: "domcontentloaded" });
-
-      await waitForEnter("Finish logging in, then press Enter to continue...");
-
-      if (!observedToken) {
-        await page.reload({ waitUntil: "domcontentloaded" });
-        await page.waitForTimeout(1500);
-      }
-
-      if (!observedToken) {
-        const storageDump = await page.evaluate(() => {
-          const localEntries = Object.entries(localStorage);
-          const sessionEntries = Object.entries(sessionStorage);
-          return { localEntries, sessionEntries };
-        });
-        for (const [, value] of storageDump.localEntries) {
-          recordToken(extractToken(value));
-        }
-        for (const [, value] of storageDump.sessionEntries) {
-          recordToken(extractToken(value));
-        }
-      }
-
-      const cookies = await context.cookies(webOrigin);
-      const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
-      const csrfCookie = cookies.find((cookie) => cookie.name === "csrf_kahunas_cookie_token")?.value;
-      const csrfToken = resolveCsrfToken(options, config) ?? csrfCookie;
-
-      if (!observedToken) {
-        if (!csrfToken) {
-          throw new Error("Missing CSRF token after login. Try again or provide --csrf.");
-        }
-        if (!cookieHeader) {
-          throw new Error("Missing cookies after login. Try again.");
-        }
-        const { token: extractedToken, raw } = await fetchAuthToken(
-          csrfToken,
-          cookieHeader,
-          webBaseUrl
-        );
-        recordToken(extractedToken);
-        if (rawOutput) {
-          console.log(raw);
-          return;
-        }
-      }
-
-      if (!observedToken) {
-        throw new Error("Unable to extract auth token after login.");
-      }
-
-      writeConfig({
-        ...config,
-        token: observedToken,
-        csrfToken,
-        webBaseUrl
-      });
-      console.log(observedToken);
-    } finally {
-      await browser.close();
     }
+
+    const baseUrl = resolveBaseUrl(options, config);
+    let response = await postJson("/api/v2/checkin/list", token, baseUrl, { page: 1, rpp: 1 });
+    if (autoLogin && isTokenExpiredResponse(response.json)) {
+      token = await loginAndPersist(options, config, "silent");
+      response = await postJson("/api/v2/checkin/list", token, baseUrl, { page: 1, rpp: 1 });
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.text}`);
+    }
+
+    if (response.json === undefined) {
+      console.log("unknown");
+      return;
+    }
+
+    console.log(isTokenExpiredResponse(response.json) ? "expired" : "valid");
     return;
   }
 
@@ -476,9 +638,14 @@ async function handleCheckins(positionals: string[], options: Record<string, str
   }
 
   const config = readConfig();
-  const token = resolveToken(options, config);
+  const autoLogin = shouldAutoLogin(options, true);
+  let token = resolveToken(options, config);
   if (!token) {
-    throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth set <token>'.");
+    if (autoLogin) {
+      token = await loginAndPersist(options, config, "silent");
+    } else {
+      throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
+    }
   }
 
   const baseUrl = resolveBaseUrl(options, config);
@@ -486,13 +653,138 @@ async function handleCheckins(positionals: string[], options: Record<string, str
   const rpp = parseNumber(options.rpp, 12);
   const rawOutput = isFlagEnabled(options, "raw");
 
-  await requestJson("/api/v2/checkin/list", token, baseUrl, { page, rpp }, rawOutput);
+  let response = await postJson("/api/v2/checkin/list", token, baseUrl, { page, rpp });
+  if (autoLogin && isTokenExpiredResponse(response.json)) {
+    token = await loginAndPersist(options, config, "silent");
+    response = await postJson("/api/v2/checkin/list", token, baseUrl, { page, rpp });
+  }
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.text}`);
+  }
+
+  printResponse(response, rawOutput);
 }
 
 async function handleWorkout(positionals: string[], options: Record<string, string>): Promise<void> {
   const action = positionals[0];
   if (!action || action === "help") {
     printUsage();
+    return;
+  }
+
+  const config = readConfig();
+  const autoLogin = shouldAutoLogin(options, true);
+  let token = resolveToken(options, config);
+  if (!token) {
+    if (autoLogin) {
+      token = await loginAndPersist(options, config, "silent");
+    } else {
+      throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
+    }
+  }
+
+  const baseUrl = resolveBaseUrl(options, config);
+  const rawOutput = isFlagEnabled(options, "raw");
+  const page = parseNumber(options.page, 1);
+  const rpp = parseNumber(options.rpp, 12);
+  const listRpp = action === "latest" && options.rpp === undefined ? 100 : rpp;
+
+  const fetchList = async (): Promise<{ response: ApiResponse; plans: WorkoutPlan[] }> => {
+    const url = new URL("/api/v1/workoutprogram", baseUrl);
+    if (page) {
+      url.searchParams.set("page", String(page));
+    }
+    if (listRpp) {
+      url.searchParams.set("rpp", String(listRpp));
+    }
+
+    let response = await getWithAuth(url.pathname + url.search, token!, baseUrl);
+    if (autoLogin && isTokenExpiredResponse(response.json)) {
+      token = await loginAndPersist(options, config, "silent");
+      response = await getWithAuth(url.pathname + url.search, token, baseUrl);
+    }
+
+    return { response, plans: extractWorkoutPlans(response.json) };
+  };
+
+  if (action === "list") {
+    const { response } = await fetchList();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.text}`);
+    }
+    printResponse(response, rawOutput);
+    return;
+  }
+
+  if (action === "pick") {
+    const { response, plans } = await fetchList();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.text}`);
+    }
+    if (plans.length === 0) {
+      throw new Error("No workout programs found.");
+    }
+
+    if (!rawOutput) {
+      console.log("Pick a workout program:");
+      plans.forEach((plan, index) => {
+        console.log(`${index + 1}) ${formatWorkoutSummary(plan)}`);
+      });
+    }
+
+    const answer = await askQuestion(`Enter number (1-${plans.length}): `);
+    const selection = Number.parseInt(answer, 10);
+    if (Number.isNaN(selection) || selection < 1 || selection > plans.length) {
+      throw new Error("Invalid selection.");
+    }
+
+    const chosen = plans[selection - 1];
+    if (!chosen.uuid) {
+      throw new Error("Selected workout is missing a uuid.");
+    }
+
+    const csrfToken = resolveCsrfToken(options, config);
+    let responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
+    if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
+      token = await loginAndPersist(options, config, "silent");
+      responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
+    }
+
+    if (!responseProgram.ok) {
+      throw new Error(`HTTP ${responseProgram.status}: ${responseProgram.text}`);
+    }
+
+    printResponse(responseProgram, rawOutput);
+    return;
+  }
+
+  if (action === "latest") {
+    const { response, plans } = await fetchList();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.text}`);
+    }
+    if (plans.length === 0) {
+      throw new Error("No workout programs found.");
+    }
+
+    const chosen = pickLatestWorkout(plans);
+    if (!chosen || !chosen.uuid) {
+      throw new Error("Latest workout is missing a uuid.");
+    }
+
+    const csrfToken = resolveCsrfToken(options, config);
+    let responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
+    if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
+      token = await loginAndPersist(options, config, "silent");
+      responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
+    }
+
+    if (!responseProgram.ok) {
+      throw new Error(`HTTP ${responseProgram.status}: ${responseProgram.text}`);
+    }
+
+    printResponse(responseProgram, rawOutput);
     return;
   }
 
@@ -505,22 +797,18 @@ async function handleWorkout(positionals: string[], options: Record<string, stri
     throw new Error("Missing workout program id.");
   }
 
-  const config = readConfig();
-  const token = resolveToken(options, config);
-  if (!token) {
-    throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth set <token>'.");
-  }
-
-  const baseUrl = resolveBaseUrl(options, config);
   const csrfToken = resolveCsrfToken(options, config);
-  const rawOutput = isFlagEnabled(options, "raw");
-
-  const url = new URL(`/api/v1/workoutprogram/${programId}`, baseUrl);
-  if (csrfToken) {
-    url.searchParams.set("csrf_kahunas_token", csrfToken);
+  let responseProgram = await fetchWorkoutProgram(token, baseUrl, programId, csrfToken);
+  if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
+    token = await loginAndPersist(options, config, "silent");
+    responseProgram = await fetchWorkoutProgram(token, baseUrl, programId, csrfToken);
   }
 
-  await requestText(url.pathname + url.search, token, baseUrl, rawOutput);
+  if (!responseProgram.ok) {
+    throw new Error(`HTTP ${responseProgram.status}: ${responseProgram.text}`);
+  }
+
+  printResponse(responseProgram, rawOutput);
 }
 
 async function main(): Promise<void> {
