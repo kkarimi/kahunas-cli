@@ -41,6 +41,7 @@ const readline = __importStar(require("node:readline"));
 const DEFAULT_BASE_URL = "https://api.kahunas.io";
 const DEFAULT_WEB_BASE_URL = "https://kahunas.io";
 const CONFIG_PATH = path.join(os.homedir(), ".config", "kahunas", "config.json");
+const WORKOUT_CACHE_PATH = path.join(os.homedir(), ".config", "kahunas", "workouts.json");
 function parseArgs(argv) {
     const positionals = [];
     const options = {};
@@ -133,6 +134,25 @@ function writeConfig(config) {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 }
+function readWorkoutCache() {
+    if (!fs.existsSync(WORKOUT_CACHE_PATH)) {
+        return undefined;
+    }
+    const raw = fs.readFileSync(WORKOUT_CACHE_PATH, "utf-8");
+    try {
+        return JSON.parse(raw);
+    }
+    catch {
+        return undefined;
+    }
+}
+function writeWorkoutCache(plans) {
+    const dir = path.dirname(WORKOUT_CACHE_PATH);
+    fs.mkdirSync(dir, { recursive: true });
+    const cache = { updatedAt: new Date().toISOString(), plans };
+    fs.writeFileSync(WORKOUT_CACHE_PATH, `${JSON.stringify(cache, null, 2)}\n`, "utf-8");
+    return cache;
+}
 function resolveToken(options, config) {
     return options.token ?? process.env.KAHUNAS_TOKEN ?? config.token;
 }
@@ -144,6 +164,9 @@ function resolveCsrfCookie(options, config) {
 }
 function resolveAuthCookie(options, config) {
     return options.cookie ?? process.env.KAHUNAS_COOKIE ?? config.authCookie;
+}
+function resolveUserUuid(options, config) {
+    return options.user ?? process.env.KAHUNAS_USER_UUID ?? config.userUuid;
 }
 function resolveBaseUrl(options, config) {
     return options["base-url"] ?? config.baseUrl ?? DEFAULT_BASE_URL;
@@ -172,6 +195,97 @@ function parseJsonText(text) {
         return undefined;
     }
 }
+function isLikelyLoginHtml(text) {
+    const trimmed = text.trim().toLowerCase();
+    if (!trimmed.startsWith("<")) {
+        return false;
+    }
+    return (trimmed.includes("login to your account") ||
+        trimmed.includes("welcome back") ||
+        trimmed.includes("<title>kahunas"));
+}
+function mapWorkoutPlan(entry) {
+    const uuid = typeof entry.uuid === "string" ? entry.uuid : undefined;
+    const title = typeof entry.title === "string"
+        ? entry.title
+        : typeof entry.name === "string"
+            ? entry.name
+            : undefined;
+    if (!uuid || !title) {
+        return undefined;
+    }
+    return {
+        uuid,
+        title,
+        updated_at_utc: typeof entry.updated_at_utc === "number" ? entry.updated_at_utc : undefined,
+        created_at_utc: typeof entry.created_at_utc === "number" ? entry.created_at_utc : undefined,
+        days: typeof entry.days === "number" ? entry.days : undefined
+    };
+}
+function findWorkoutPlansDeep(payload) {
+    const results = [];
+    const seen = new Set();
+    const record = (plan) => {
+        if (!plan || !plan.uuid) {
+            return;
+        }
+        if (seen.has(plan.uuid)) {
+            return;
+        }
+        seen.add(plan.uuid);
+        results.push(plan);
+    };
+    const visit = (value) => {
+        if (Array.isArray(value)) {
+            let foundCandidate = false;
+            for (const entry of value) {
+                if (entry && typeof entry === "object") {
+                    const plan = mapWorkoutPlan(entry);
+                    if (plan) {
+                        record(plan);
+                        foundCandidate = true;
+                    }
+                }
+            }
+            if (foundCandidate) {
+                return;
+            }
+            for (const entry of value) {
+                visit(entry);
+            }
+            return;
+        }
+        if (value && typeof value === "object") {
+            const plan = mapWorkoutPlan(value);
+            if (plan) {
+                record(plan);
+            }
+            for (const entry of Object.values(value)) {
+                visit(entry);
+            }
+        }
+    };
+    visit(payload);
+    return results;
+}
+function mergeWorkoutPlans(primary, secondary) {
+    const merged = [];
+    const seen = new Set();
+    const pushPlan = (plan) => {
+        if (!plan.uuid || seen.has(plan.uuid)) {
+            return;
+        }
+        seen.add(plan.uuid);
+        merged.push(plan);
+    };
+    for (const plan of primary) {
+        pushPlan(plan);
+    }
+    for (const plan of secondary) {
+        pushPlan(plan);
+    }
+    return merged;
+}
 function extractWorkoutPlans(payload) {
     if (!payload || typeof payload !== "object") {
         return [];
@@ -179,24 +293,55 @@ function extractWorkoutPlans(payload) {
     const record = payload;
     const data = record.data;
     if (!data || typeof data !== "object") {
-        return [];
+        return findWorkoutPlansDeep(payload);
     }
-    const workoutPlan = data.workout_plan;
-    if (!Array.isArray(workoutPlan)) {
-        return [];
+    const dataRecord = data;
+    const keys = ["workout_plan", "workout_plans", "workout_program", "workout_programs"];
+    const plans = [];
+    for (const key of keys) {
+        const workoutPlan = dataRecord[key];
+        if (Array.isArray(workoutPlan)) {
+            for (const entry of workoutPlan) {
+                if (entry && typeof entry === "object") {
+                    const plan = mapWorkoutPlan(entry);
+                    if (plan) {
+                        plans.push(plan);
+                    }
+                }
+            }
+            continue;
+        }
+        if (workoutPlan && typeof workoutPlan === "object") {
+            const plan = mapWorkoutPlan(workoutPlan);
+            if (plan) {
+                plans.push(plan);
+            }
+        }
     }
-    return workoutPlan
-        .filter((entry) => entry && typeof entry === "object")
-        .map((entry) => {
-        const plan = entry;
-        return {
-            uuid: typeof plan.uuid === "string" ? plan.uuid : undefined,
-            title: typeof plan.title === "string" ? plan.title : undefined,
-            updated_at_utc: typeof plan.updated_at_utc === "number" ? plan.updated_at_utc : undefined,
-            created_at_utc: typeof plan.created_at_utc === "number" ? plan.created_at_utc : undefined,
-            days: typeof plan.days === "number" ? plan.days : undefined
-        };
-    });
+    if (plans.length > 0) {
+        return plans;
+    }
+    return findWorkoutPlansDeep(payload);
+}
+function extractUserUuidFromCheckins(payload) {
+    if (!payload || typeof payload !== "object") {
+        return undefined;
+    }
+    const record = payload;
+    const data = record.data;
+    if (!data || typeof data !== "object") {
+        return undefined;
+    }
+    const checkins = data.checkins;
+    if (!Array.isArray(checkins) || checkins.length === 0) {
+        return undefined;
+    }
+    const first = checkins[0];
+    if (!first || typeof first !== "object") {
+        return undefined;
+    }
+    const candidate = first.user_uuid;
+    return typeof candidate === "string" ? candidate : undefined;
 }
 function pickLatestWorkout(plans) {
     const sorted = [...plans].sort((a, b) => {
@@ -240,7 +385,7 @@ function isTokenExpiredResponse(payload) {
     return false;
 }
 function printUsage() {
-    console.log(`kahunas - CLI for Kahunas API\n\nUsage:\n  kahunas auth set <token> [--base-url URL] [--csrf CSRF] [--web-base-url URL] [--cookie COOKIE] [--csrf-cookie VALUE]\n  kahunas auth token [--csrf CSRF] [--cookie COOKIE] [--csrf-cookie VALUE] [--web-base-url URL] [--raw]\n  kahunas auth login [--web-base-url URL] [--headless] [--raw]\n  kahunas auth status [--token TOKEN] [--base-url URL] [--auto-login] [--headless]\n  kahunas auth show\n  kahunas checkins list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout pick [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout latest [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout program <id> [--csrf CSRF] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n\nEnv:\n  KAHUNAS_TOKEN=...\n  KAHUNAS_CSRF=...\n  KAHUNAS_CSRF_COOKIE=...\n  KAHUNAS_COOKIE=...\n  KAHUNAS_WEB_BASE_URL=...\n\nConfig:\n  ${CONFIG_PATH}`);
+    console.log(`kahunas - CLI for Kahunas API\n\nUsage:\n  kahunas auth set <token> [--base-url URL] [--csrf CSRF] [--web-base-url URL] [--cookie COOKIE] [--csrf-cookie VALUE]\n  kahunas auth token [--csrf CSRF] [--cookie COOKIE] [--csrf-cookie VALUE] [--web-base-url URL] [--raw]\n  kahunas auth login [--web-base-url URL] [--headless] [--raw]\n  kahunas auth status [--token TOKEN] [--base-url URL] [--auto-login] [--headless]\n  kahunas auth show\n  kahunas checkins list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout list [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout pick [--page N] [--rpp N] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout latest [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n  kahunas workout events [--user UUID] [--timezone TZ] [--program UUID] [--workout UUID] [--raw] [--no-auto-login] [--headless]\n  kahunas workout sync [--headless]\n  kahunas workout program <id> [--csrf CSRF] [--token TOKEN] [--base-url URL] [--raw] [--no-auto-login] [--headless]\n\nEnv:\n  KAHUNAS_TOKEN=...\n  KAHUNAS_CSRF=...\n  KAHUNAS_CSRF_COOKIE=...\n  KAHUNAS_COOKIE=...\n  KAHUNAS_WEB_BASE_URL=...\n  KAHUNAS_USER_UUID=...\n\nConfig:\n  ${CONFIG_PATH}`);
 }
 function askQuestion(prompt) {
     return new Promise((resolve) => {
@@ -311,6 +456,77 @@ async function fetchWorkoutProgram(token, baseUrl, programId, csrfToken) {
     }
     return getWithAuth(url.pathname + url.search, token, baseUrl);
 }
+async function captureWorkoutsFromBrowser(options, config) {
+    const webBaseUrl = resolveWebBaseUrl(options, config);
+    const headless = isFlagEnabled(options, "headless");
+    const playwright = await Promise.resolve().then(() => __importStar(require("playwright")));
+    const browser = await playwright.chromium.launch({ headless });
+    const context = await browser.newContext();
+    const plans = [];
+    const seen = new Set();
+    let observedToken;
+    const recordToken = (candidate) => {
+        if (!candidate || observedToken) {
+            return;
+        }
+        if (isLikelyAuthToken(candidate)) {
+            observedToken = candidate;
+        }
+    };
+    const recordPlans = (incoming) => {
+        for (const plan of incoming) {
+            if (!plan.uuid || seen.has(plan.uuid)) {
+                continue;
+            }
+            seen.add(plan.uuid);
+            plans.push(plan);
+        }
+    };
+    context.on("request", (request) => {
+        const headers = request.headers();
+        recordToken(headers["auth-user-token"]);
+    });
+    context.on("response", async (response) => {
+        const url = response.url();
+        if (!url.includes("api.kahunas.io") || !/workout|program/i.test(url)) {
+            return;
+        }
+        const contentType = response.headers()["content-type"] ?? "";
+        if (!contentType.includes("application/json")) {
+            return;
+        }
+        try {
+            const data = (await response.json());
+            const extracted = extractWorkoutPlans(data);
+            if (extracted.length > 0) {
+                recordPlans(extracted);
+            }
+        }
+        catch {
+            // Ignore responses that are not JSON.
+        }
+    });
+    let csrfToken;
+    let cookieHeader;
+    let csrfCookie;
+    try {
+        const page = await context.newPage();
+        const webOrigin = new URL(webBaseUrl).origin;
+        await page.goto(`${webOrigin}/dashboard`, { waitUntil: "domcontentloaded" });
+        await waitForEnter("Log in, open your workouts page, then press Enter to capture...");
+        const cookies = await context.cookies(webOrigin);
+        cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+        csrfCookie = cookies.find((cookie) => cookie.name === "csrf_kahunas_cookie_token")?.value;
+        csrfToken = csrfCookie ?? resolveCsrfToken(options, config);
+        if (plans.length === 0) {
+            await page.waitForTimeout(1500);
+        }
+    }
+    finally {
+        await browser.close();
+    }
+    return { plans, token: observedToken, csrfToken, webBaseUrl, cookieHeader, csrfCookie };
+}
 async function fetchAuthToken(csrfToken, cookieHeader, webBaseUrl) {
     const webOrigin = new URL(webBaseUrl).origin;
     const url = new URL("/get-token", webOrigin);
@@ -375,7 +591,7 @@ async function loginWithBrowser(options, config) {
         const cookies = await context.cookies(webOrigin);
         const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
         const csrfCookie = cookies.find((cookie) => cookie.name === "csrf_kahunas_cookie_token")?.value;
-        const csrfToken = resolveCsrfToken(options, config) ?? csrfCookie;
+        const csrfToken = csrfCookie ?? resolveCsrfToken(options, config);
         let raw;
         if (!observedToken) {
             if (!csrfToken) {
@@ -391,7 +607,7 @@ async function loginWithBrowser(options, config) {
         if (!observedToken) {
             throw new Error("Unable to extract auth token after login.");
         }
-        return { token: observedToken, csrfToken, webBaseUrl, raw };
+        return { token: observedToken, csrfToken, webBaseUrl, raw, cookieHeader, csrfCookie };
     }
     finally {
         await browser.close();
@@ -406,6 +622,12 @@ async function loginAndPersist(options, config, outputMode) {
     };
     if (result.csrfToken) {
         nextConfig.csrfToken = result.csrfToken;
+    }
+    if (result.cookieHeader) {
+        nextConfig.authCookie = result.cookieHeader;
+    }
+    if (result.csrfCookie) {
+        nextConfig.csrfCookie = result.csrfCookie;
     }
     writeConfig(nextConfig);
     if (outputMode !== "silent") {
@@ -562,6 +784,10 @@ async function handleCheckins(positionals, options) {
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.text}`);
     }
+    const userUuid = extractUserUuidFromCheckins(response.json);
+    if (userUuid && userUuid !== config.userUuid) {
+        writeConfig({ ...config, userUuid });
+    }
     printResponse(response, rawOutput);
 }
 async function handleWorkout(positionals, options) {
@@ -573,20 +799,24 @@ async function handleWorkout(positionals, options) {
     const config = readConfig();
     const autoLogin = shouldAutoLogin(options, true);
     let token = resolveToken(options, config);
-    if (!token) {
-        if (autoLogin) {
-            token = await loginAndPersist(options, config, "silent");
+    const ensureToken = async () => {
+        if (!token) {
+            if (autoLogin) {
+                token = await loginAndPersist(options, config, "silent");
+            }
+            else {
+                throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
+            }
         }
-        else {
-            throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
-        }
-    }
+        return token;
+    };
     const baseUrl = resolveBaseUrl(options, config);
     const rawOutput = isFlagEnabled(options, "raw");
     const page = parseNumber(options.page, 1);
     const rpp = parseNumber(options.rpp, 12);
     const listRpp = action === "latest" && options.rpp === undefined ? 100 : rpp;
     const fetchList = async () => {
+        await ensureToken();
         const url = new URL("/api/v1/workoutprogram", baseUrl);
         if (page) {
             url.searchParams.set("page", String(page));
@@ -599,14 +829,34 @@ async function handleWorkout(positionals, options) {
             token = await loginAndPersist(options, config, "silent");
             response = await getWithAuth(url.pathname + url.search, token, baseUrl);
         }
-        return { response, plans: extractWorkoutPlans(response.json) };
+        const cache = readWorkoutCache();
+        const plans = extractWorkoutPlans(response.json);
+        const merged = cache ? mergeWorkoutPlans(plans, cache.plans) : plans;
+        return { response, plans: merged, cache };
     };
     if (action === "list") {
-        const { response } = await fetchList();
+        const { response, plans, cache } = await fetchList();
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.text}`);
         }
-        printResponse(response, rawOutput);
+        if (rawOutput) {
+            printResponse(response, rawOutput);
+            return;
+        }
+        const output = {
+            source: cache ? "api+cache" : "api",
+            cache: cache
+                ? {
+                    updated_at: cache.updatedAt,
+                    count: cache.plans.length,
+                    path: WORKOUT_CACHE_PATH
+                }
+                : undefined,
+            data: {
+                workout_plan: plans
+            }
+        };
+        console.log(JSON.stringify(output, null, 2));
         return;
     }
     if (action === "pick") {
@@ -633,7 +883,8 @@ async function handleWorkout(positionals, options) {
             throw new Error("Selected workout is missing a uuid.");
         }
         const csrfToken = resolveCsrfToken(options, config);
-        let responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
+        const ensuredToken = await ensureToken();
+        let responseProgram = await fetchWorkoutProgram(ensuredToken, baseUrl, chosen.uuid, csrfToken);
         if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
             token = await loginAndPersist(options, config, "silent");
             responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
@@ -657,7 +908,8 @@ async function handleWorkout(positionals, options) {
             throw new Error("Latest workout is missing a uuid.");
         }
         const csrfToken = resolveCsrfToken(options, config);
-        let responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
+        const ensuredToken = await ensureToken();
+        let responseProgram = await fetchWorkoutProgram(ensuredToken, baseUrl, chosen.uuid, csrfToken);
         if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
             token = await loginAndPersist(options, config, "silent");
             responseProgram = await fetchWorkoutProgram(token, baseUrl, chosen.uuid, csrfToken);
@@ -668,6 +920,156 @@ async function handleWorkout(positionals, options) {
         printResponse(responseProgram, rawOutput);
         return;
     }
+    if (action === "events") {
+        const baseWebUrl = resolveWebBaseUrl(options, config);
+        const webOrigin = new URL(baseWebUrl).origin;
+        const timezone = options.timezone ??
+            process.env.TZ ??
+            Intl.DateTimeFormat().resolvedOptions().timeZone ??
+            "UTC";
+        let userUuid = resolveUserUuid(options, config);
+        if (!userUuid) {
+            throw new Error("Missing user uuid. Use --user or set KAHUNAS_USER_UUID.");
+        }
+        if (userUuid !== config.userUuid) {
+            writeConfig({ ...config, userUuid });
+        }
+        let csrfToken = resolveCsrfToken(options, config);
+        let csrfCookie = resolveCsrfCookie(options, config);
+        let authCookie = resolveAuthCookie(options, config);
+        let effectiveCsrfToken = csrfCookie ?? csrfToken;
+        let cookieHeader = authCookie ??
+            (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
+        if ((!csrfToken || !cookieHeader || !authCookie) && autoLogin) {
+            await loginAndPersist(options, config, "silent");
+            const refreshed = readConfig();
+            csrfToken = resolveCsrfToken(options, refreshed);
+            csrfCookie = resolveCsrfCookie(options, refreshed);
+            authCookie = resolveAuthCookie(options, refreshed);
+            effectiveCsrfToken = csrfCookie ?? csrfToken;
+            cookieHeader =
+                authCookie ??
+                    (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
+        }
+        if (!effectiveCsrfToken) {
+            throw new Error("Missing CSRF token. Run 'kahunas auth login' and try again.");
+        }
+        if (!cookieHeader) {
+            throw new Error("Missing cookies. Run 'kahunas auth login' and try again.");
+        }
+        const url = new URL(`/coach/clients/calendar/getEvent/${userUuid}`, webOrigin);
+        url.searchParams.set("timezone", timezone);
+        const body = new URLSearchParams();
+        body.set("csrf_kahunas_token", effectiveCsrfToken);
+        body.set("filter", options.filter ?? "");
+        let response = await fetch(url.toString(), {
+            method: "POST",
+            headers: {
+                accept: "*/*",
+                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                cookie: cookieHeader,
+                origin: webOrigin,
+                referer: `${webOrigin}/dashboard`,
+                "x-requested-with": "XMLHttpRequest"
+            },
+            body: body.toString()
+        });
+        let text = await response.text();
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${text}`);
+        }
+        if (autoLogin && isLikelyLoginHtml(text)) {
+            await loginAndPersist(options, config, "silent");
+            const refreshed = readConfig();
+            csrfToken = resolveCsrfToken(options, refreshed);
+            csrfCookie = resolveCsrfCookie(options, refreshed);
+            authCookie = resolveAuthCookie(options, refreshed);
+            effectiveCsrfToken = csrfCookie ?? csrfToken;
+            cookieHeader =
+                authCookie ??
+                    (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
+            if (!effectiveCsrfToken || !cookieHeader) {
+                throw new Error("Login required. Run 'kahunas auth login' and try again.");
+            }
+            const retry = await fetch(url.toString(), {
+                method: "POST",
+                headers: {
+                    accept: "*/*",
+                    "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    cookie: cookieHeader,
+                    origin: webOrigin,
+                    referer: `${webOrigin}/dashboard`,
+                    "x-requested-with": "XMLHttpRequest"
+                },
+                body: body.toString()
+            });
+            text = await retry.text();
+            if (!retry.ok) {
+                throw new Error(`HTTP ${retry.status}: ${text}`);
+            }
+        }
+        if (rawOutput) {
+            console.log(text);
+            return;
+        }
+        const payload = parseJsonText(text);
+        if (!Array.isArray(payload)) {
+            console.log(text);
+            return;
+        }
+        const programFilter = options.program;
+        const workoutFilter = options.workout;
+        const filtered = payload.filter((entry) => {
+            if (!entry || typeof entry !== "object") {
+                return false;
+            }
+            const record = entry;
+            if (programFilter && record.program !== programFilter) {
+                return false;
+            }
+            if (workoutFilter && record.workout !== workoutFilter) {
+                return false;
+            }
+            return true;
+        });
+        const sorted = [...filtered].sort((a, b) => {
+            const aStart = typeof a.start === "string" ? Date.parse(a.start.replace(" ", "T")) : 0;
+            const bStart = typeof b.start === "string" ? Date.parse(b.start.replace(" ", "T")) : 0;
+            return aStart - bStart;
+        });
+        console.log(JSON.stringify(sorted, null, 2));
+        return;
+    }
+    if (action === "sync") {
+        const captured = await captureWorkoutsFromBrowser(options, config);
+        const nextConfig = { ...config };
+        if (captured.token) {
+            nextConfig.token = captured.token;
+        }
+        if (captured.csrfToken) {
+            nextConfig.csrfToken = captured.csrfToken;
+        }
+        if (captured.webBaseUrl) {
+            nextConfig.webBaseUrl = captured.webBaseUrl;
+        }
+        if (captured.cookieHeader) {
+            nextConfig.authCookie = captured.cookieHeader;
+        }
+        if (captured.csrfCookie) {
+            nextConfig.csrfCookie = captured.csrfCookie;
+        }
+        writeConfig(nextConfig);
+        const cache = writeWorkoutCache(captured.plans);
+        console.log(JSON.stringify({
+            message: "Workout programs synced",
+            cache: {
+                updated_at: cache.updatedAt,
+                count: cache.plans.length,
+                path: WORKOUT_CACHE_PATH
+            }
+        }, null, 2));
+        return;
+    }
     if (action !== "program") {
         throw new Error(`Unknown workout action: ${action}`);
     }
@@ -675,8 +1077,9 @@ async function handleWorkout(positionals, options) {
     if (!programId) {
         throw new Error("Missing workout program id.");
     }
+    const ensuredToken = await ensureToken();
     const csrfToken = resolveCsrfToken(options, config);
-    let responseProgram = await fetchWorkoutProgram(token, baseUrl, programId, csrfToken);
+    let responseProgram = await fetchWorkoutProgram(ensuredToken, baseUrl, programId, csrfToken);
     if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
         token = await loginAndPersist(options, config, "silent");
         responseProgram = await fetchWorkoutProgram(token, baseUrl, programId, csrfToken);
