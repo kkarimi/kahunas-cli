@@ -140,6 +140,14 @@ If Playwright did not download a browser during install:
 pnpm exec playwright install chromium
 ```
 
+## Testing
+
+Run the unit tests with:
+
+```bash
+pnpm test
+```
+
 ## Notes
 
 - This CLI uses the same APIs the web app uses; tokens can expire quickly.
