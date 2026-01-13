@@ -16,22 +16,22 @@ pnpm build
 2) Log in once (opens a browser):
 
 ```bash
-node dist/cli.js auth login
+pnpm kahunas -- auth login
 ```
 
 3) Fetch data:
 
 ```bash
-node dist/cli.js checkins list
-node dist/cli.js workout list
-node dist/cli.js workout pick
+pnpm kahunas -- checkins list
+pnpm kahunas -- workout list
+pnpm kahunas -- workout pick
 ```
 
-You can also use the pnpm shortcut:
+You can also run without installing globally:
 
 ```bash
-pnpm kahunas -- checkins list
-pnpm kahunas -- workout events
+npx kahunas-cli checkins list
+npx kahunas-cli workout events
 ```
 
 ## Commands
@@ -72,7 +72,7 @@ Tokens are saved to:
 If the API list is missing a program you see in the web UI, run:
 
 ```bash
-node dist/cli.js workout sync
+pnpm kahunas -- workout sync
 ```
 
 This opens a browser, you log in, then navigate to your workouts page. After you press Enter, the CLI captures the workout list from network responses and writes a cache:
@@ -87,7 +87,7 @@ Raw output (`--raw`) prints the API response only.
 To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is enriched with the full program payload (best effort; falls back to cached summary if needed).
 
 ```bash
-node dist/cli.js workout events --user <user-uuid>
+pnpm kahunas -- workout events --user <user-uuid>
 ```
 
 Or via pnpm:
@@ -101,8 +101,8 @@ Default timezone is `Europe/London`. Override with `--timezone`.
 You can filter by program or workout UUID:
 
 ```bash
-node dist/cli.js workout events --program <program-uuid>
-node dist/cli.js workout events --workout <workout-uuid>
+pnpm kahunas -- workout events --program <program-uuid>
+pnpm kahunas -- workout events --workout <workout-uuid>
 ```
 
 Use `--minimal` to return the raw event objects without program enrichment.
@@ -117,7 +117,7 @@ The user UUID is saved automatically after `checkins list`, or you can set it:
 Most commands auto-login by default if a token is missing or expired. To disable:
 
 ```bash
-node dist/cli.js checkins list --no-auto-login
+pnpm kahunas -- checkins list --no-auto-login
 ```
 
 ## Flags
