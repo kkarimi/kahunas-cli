@@ -2,7 +2,7 @@
 
 A TypeScript CLI for Kahunas (kahunas.io) to fetch check-ins and workouts.
 
-![Kahunas CLI screenshot](https://raw.githubusercontent.com/kkarimi/kahunas-cli/main/ai-screenshot.png)
+![Kahunas CLI screenshot](https://unpkg.com/kahunas-cli@latest/ai-screenshot.png)
 
 ## Quick start
 
