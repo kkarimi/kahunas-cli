@@ -18,6 +18,10 @@
   "keywords": [],
   "author": "Nima Karimi",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkarimi/kahunas-cli.git"
+  },
   "files": [
     "dist/cli.js",
     "README.md",
