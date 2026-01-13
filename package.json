@@ -20,7 +20,8 @@
   "license": "ISC",
   "files": [
     "dist/cli.js",
-    "README.md"
+    "README.md",
+    "ai-screenshot.png"
   ],
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
