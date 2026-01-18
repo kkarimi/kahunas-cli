@@ -25,6 +25,8 @@ export type Config = {
   userUuid?: string;
   tokenUpdatedAt?: string;
   tokenExpiresAt?: string | null;
+  debug?: boolean;
+  headless?: boolean;
 };
 
 export type AuthConfig = {

@@ -29,7 +29,7 @@ import { fetchWorkoutProgram, getWithAuth, parseJsonText, postJson } from "../ht
 import { printResponse } from "../output";
 import { extractUserUuidFromCheckins, isTokenExpiredResponse } from "../responses";
 import { isLikelyLoginHtml } from "../tokens";
-import { askQuestion } from "../utils";
+import { askQuestion, debugLog } from "../utils";
 import {
   buildWorkoutPlanIndex,
   extractWorkoutPlans,
@@ -53,6 +53,7 @@ export async function handleWorkout(
   }
 
   const config = readConfig();
+  const debug = config.debug === true;
   const autoLogin = true;
   let token = resolveToken(options, config);
   const ensureToken = async (): Promise<string> => {
@@ -476,7 +477,7 @@ export async function handleWorkout(
   if (action === "events") {
     const minimal = isFlagEnabled(options, "minimal");
     const full = isFlagEnabled(options, "full");
-    const debugPreview = isFlagEnabled(options, "debug-preview");
+    const debugPreview = isFlagEnabled(options, "debug-preview") || debug;
     const limit = 1;
 
     const { text, payload, timezone } = await fetchWorkoutEventsPayload();
@@ -512,8 +513,9 @@ export async function handleWorkout(
           (program ? findWorkoutPreviewHtmlMatch(program) : undefined);
         const dayIndex = resolveWorkoutEventDayIndex(entry, program);
         const source = match ? match.source : "not_found";
-        console.error(
-          `debug-preview event=${eventId} program=${programUuid ?? "unknown"} day_index=${
+        debugLog(
+          true,
+          `preview event=${eventId} program=${programUuid ?? "unknown"} day_index=${
             dayIndex ?? "none"
           } source=${source}`
         );

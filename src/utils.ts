@@ -24,3 +24,10 @@ export function askQuestion(prompt: string): Promise<string> {
 export function waitForEnter(prompt: string): Promise<void> {
   return askQuestion(prompt).then(() => undefined);
 }
+
+export function debugLog(enabled: boolean, message: string): void {
+  if (!enabled) {
+    return;
+  }
+  console.error(`[debug] ${message}`);
+}

@@ -124,6 +124,10 @@ Use `?day=<index>` to switch the selected workout day tab in the browser.
 
 Most commands auto-login if a token is missing or expired. This runs a browser session and saves session details in `~/.config/kahunas/config.json` (headless by default). If `~/.config/kahunas/auth.json` is present, the login step is automated.
 
+## Debug logging
+
+Set `debug` to `true` in `~/.config/kahunas/config.json` to enable extra logs on stderr (includes workout preview debug output).
+
 ## Flags
 
 - `--raw` prints raw API responses (no formatting).

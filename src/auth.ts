@@ -3,7 +3,7 @@ import type { Config } from "./config";
 import { AUTH_PATH, readAuthConfig, resolveCsrfToken, resolveWebBaseUrl, writeConfig } from "./config";
 import { fetchAuthToken } from "./http";
 import { extractJwtExpiry, extractToken, isLikelyAuthToken } from "./tokens";
-import { waitForEnter } from "./utils";
+import { debugLog, waitForEnter } from "./utils";
 import { extractWorkoutPlans, type WorkoutPlan } from "./workouts";
 
 type LoginResult = {
@@ -157,9 +157,14 @@ async function waitForPasswordFieldGone(page: Page, timeoutMs: number): Promise<
   return false;
 }
 
-async function attemptAutoLogin(page: Page, auth: StoredAuth): Promise<boolean> {
+async function attemptAutoLogin(
+  page: Page,
+  auth: StoredAuth,
+  debug: boolean
+): Promise<boolean> {
   const hasLoginForm = await waitForAnyVisibleSelector(page, LOGIN_SELECTORS.password, 5000);
   if (!hasLoginForm) {
+    debugLog(debug, "Login form not detected; skipping auto-login.");
     return false;
   }
 
@@ -182,6 +187,7 @@ async function attemptAutoLogin(page: Page, auth: StoredAuth): Promise<boolean> 
   }
 
   await page.waitForTimeout(1500);
+  debugLog(debug, "Submitted login form.");
   return true;
 }
 
@@ -196,7 +202,7 @@ async function waitForPlans(plans: WorkoutPlan[], timeoutMs: number): Promise<bo
   return plans.length > 0;
 }
 
-async function clickWorkoutNav(page: Page): Promise<boolean> {
+async function clickWorkoutNav(page: Page, debug: boolean): Promise<boolean> {
   for (const selector of WORKOUT_NAV_SELECTORS) {
     const locator = page.locator(selector).first();
     if ((await locator.count()) === 0) {
@@ -209,6 +215,7 @@ async function clickWorkoutNav(page: Page): Promise<boolean> {
     }
     try {
       await locator.click({ timeout: 2000, force: true });
+      debugLog(debug, `Clicked workout nav selector: ${selector}`);
       return true;
     } catch {
       // Try next selector.
@@ -246,18 +253,24 @@ async function clickWorkoutNav(page: Page): Promise<boolean> {
 async function triggerWorkoutCapture(
   page: Page,
   webOrigin: string,
-  plans: WorkoutPlan[]
+  plans: WorkoutPlan[],
+  debug: boolean
 ): Promise<boolean> {
   if (plans.length > 0) {
     return true;
   }
   const hasWorkoutNav = await waitForAnySelectorMatch(page, WORKOUT_NAV_SELECTORS, 12000);
   if (!hasWorkoutNav) {
+    debugLog(debug, "Workout nav not detected.");
     return false;
   }
-  await clickWorkoutNav(page);
+  const clicked = await clickWorkoutNav(page, debug);
+  if (!clicked) {
+    debugLog(debug, "Workout nav click failed.");
+  }
   await page.waitForTimeout(1000);
   await waitForPlans(plans, 8000);
+  debugLog(debug, `Workout capture plans=${plans.length}`);
   return plans.length > 0;
 }
 
@@ -266,7 +279,8 @@ export async function captureWorkoutsFromBrowser(
   config: Config
 ): Promise<BrowserWorkoutCapture> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
-  const headless = true;
+  const headless = config.headless ?? true;
+  const debug = config.debug === true;
   const storedAuth = resolveStoredAuth();
 
   const playwright = await import("playwright");
@@ -329,13 +343,15 @@ export async function captureWorkoutsFromBrowser(
     const webOrigin = new URL(webBaseUrl).origin;
     const startPath = storedAuth?.loginPath ? normalizePath(storedAuth.loginPath) : "/dashboard";
     await page.goto(new URL(startPath, webOrigin).toString(), { waitUntil: "domcontentloaded" });
+    debugLog(debug, `Opened ${startPath}`);
 
     if (storedAuth) {
-      const attempted = await attemptAutoLogin(page, storedAuth);
+      debugLog(debug, "auth.json detected; attempting auto-login.");
+      const attempted = await attemptAutoLogin(page, storedAuth, debug);
       if (attempted) {
         await waitForPasswordFieldGone(page, 15000);
       }
-      const captured = await triggerWorkoutCapture(page, webOrigin, plans);
+      const captured = await triggerWorkoutCapture(page, webOrigin, plans, debug);
       if (!captured) {
         await waitForEnter("Log in, open your workouts page, then press Enter to capture...");
       }
@@ -363,7 +379,8 @@ export async function loginWithBrowser(
   config: Config
 ): Promise<LoginResult> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
-  const headless = true;
+  const headless = config.headless ?? true;
+  const debug = config.debug === true;
   const storedAuth = resolveStoredAuth();
 
   const playwright = await import("playwright");
@@ -389,9 +406,11 @@ export async function loginWithBrowser(
     const webOrigin = new URL(webBaseUrl).origin;
     const startPath = storedAuth?.loginPath ? normalizePath(storedAuth.loginPath) : "/dashboard";
     await page.goto(new URL(startPath, webOrigin).toString(), { waitUntil: "domcontentloaded" });
+    debugLog(debug, `Opened ${startPath}`);
 
     if (storedAuth) {
-      const attempted = await attemptAutoLogin(page, storedAuth);
+      debugLog(debug, "auth.json detected; attempting auto-login.");
+      const attempted = await attemptAutoLogin(page, storedAuth, debug);
       if (attempted) {
         const settled = await waitForPasswordFieldGone(page, 15000);
         if (!settled) {
