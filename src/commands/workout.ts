@@ -13,10 +13,17 @@ import {
   writeWorkoutCache,
   WORKOUT_CACHE_PATH
 } from "../config";
-import { filterWorkoutEvents, enrichWorkoutEvents, sortWorkoutEvents } from "../events";
-import { fetchWorkoutProgram, getWithAuth, parseJsonText } from "../http";
+import {
+  filterWorkoutEvents,
+  formatWorkoutEventsOutput,
+  enrichWorkoutEvents,
+  findWorkoutPreviewHtmlMatch,
+  resolveWorkoutEventDayIndex,
+  sortWorkoutEvents
+} from "../events";
+import { fetchWorkoutProgram, getWithAuth, parseJsonText, postJson } from "../http";
 import { printResponse } from "../output";
-import { isTokenExpiredResponse } from "../responses";
+import { extractUserUuidFromCheckins, isTokenExpiredResponse } from "../responses";
 import { isLikelyLoginHtml } from "../tokens";
 import { askQuestion, parseNumber } from "../utils";
 import {
@@ -196,13 +203,44 @@ export async function handleWorkout(
       "Europe/London";
     let userUuid = resolveUserUuid(options, config);
     if (!userUuid) {
-      throw new Error("Missing user uuid. Use --user or set KAHUNAS_USER_UUID.");
+      try {
+        await ensureToken();
+        let checkinsResponse = await postJson("/api/v2/checkin/list", token!, baseUrl, {
+          page: 1,
+          rpp: 1
+        });
+        if (autoLogin && isTokenExpiredResponse(checkinsResponse.json)) {
+          token = await loginAndPersist(options, config, "silent");
+          checkinsResponse = await postJson("/api/v2/checkin/list", token, baseUrl, {
+            page: 1,
+            rpp: 1
+          });
+        }
+        if (checkinsResponse.ok) {
+          const extracted = extractUserUuidFromCheckins(checkinsResponse.json);
+          if (extracted) {
+            userUuid = extracted;
+            if (userUuid !== config.userUuid) {
+              writeConfig({ ...config, userUuid });
+            }
+          }
+        }
+      } catch {
+        // Best-effort discovery only.
+      }
+    }
+    if (!userUuid) {
+      throw new Error("Missing user uuid. Use --user or run 'kahunas checkins list' once.");
     }
     if (userUuid !== config.userUuid) {
       writeConfig({ ...config, userUuid });
     }
 
     const minimal = isFlagEnabled(options, "minimal");
+    const full = isFlagEnabled(options, "full");
+    const debugPreview = isFlagEnabled(options, "debug-preview");
+    const latest = isFlagEnabled(options, "latest") || isFlagEnabled(options, "last");
+    const limit = latest ? 1 : parseNumber(options.limit, 0);
 
     let csrfToken = resolveCsrfToken(options, config);
     let csrfCookie = resolveCsrfCookie(options, config);
@@ -299,9 +337,10 @@ export async function handleWorkout(
 
     const filtered = filterWorkoutEvents(payload, options.program, options.workout);
     const sorted = sortWorkoutEvents(filtered);
+    const limited = limit > 0 ? sorted.slice(-limit) : sorted;
 
     if (minimal) {
-      console.log(JSON.stringify(sorted, null, 2));
+      console.log(JSON.stringify(limited, null, 2));
       return;
     }
 
@@ -381,8 +420,38 @@ export async function handleWorkout(
       programDetails[programId] = programIndex?.[programId] ?? null;
     }
 
-    const enriched = enrichWorkoutEvents(sorted, programDetails);
-    console.log(JSON.stringify(enriched, null, 2));
+    if (debugPreview) {
+      for (const entry of limited) {
+        const record = entry as Record<string, unknown>;
+        const eventId =
+          typeof record.id === "string" || typeof record.id === "number" ? record.id : "unknown";
+        const programUuid = typeof record.program === "string" ? record.program : undefined;
+        const program = programUuid ? programDetails[programUuid] : undefined;
+        const match =
+          findWorkoutPreviewHtmlMatch(record) ??
+          (program ? findWorkoutPreviewHtmlMatch(program) : undefined);
+        const dayIndex = resolveWorkoutEventDayIndex(entry, program);
+        const source = match ? match.source : "not_found";
+        console.error(
+          `debug-preview event=${eventId} program=${programUuid ?? "unknown"} day_index=${
+            dayIndex ?? "none"
+          } source=${source}`
+        );
+      }
+    }
+
+    if (full) {
+      const enriched = enrichWorkoutEvents(limited, programDetails);
+      console.log(JSON.stringify(enriched, null, 2));
+      return;
+    }
+
+    const formatted = formatWorkoutEventsOutput(limited, programDetails, {
+      timezone,
+      program: options.program,
+      workout: options.workout
+    });
+    console.log(JSON.stringify(formatted, null, 2));
     return;
   }
 

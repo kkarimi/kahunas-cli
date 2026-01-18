@@ -63,7 +63,7 @@ Tokens are saved to:
 - `kahunas workout latest`
   - Loads the most recently updated program.
 - `kahunas workout events`
-  - Lists workout log events with dates (from the calendar endpoint).
+  - Lists workout log events with dates and a human-friendly workout summary (from the calendar endpoint).
 - `kahunas workout program <id>`
   - Fetches a program by UUID.
 
@@ -84,7 +84,7 @@ Raw output (`--raw`) prints the API response only.
 
 ### Workout events (dates)
 
-To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is enriched with the full program payload (best effort; falls back to cached summary if needed).
+To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is summarized into a human-friendly structure (total volume sets, exercises, supersets). Use `--full` to return the full program payload (best effort; falls back to cached summary if needed).
 
 ```bash
 pnpm kahunas -- workout events --user <user-uuid>
@@ -105,9 +105,9 @@ pnpm kahunas -- workout events --program <program-uuid>
 pnpm kahunas -- workout events --workout <workout-uuid>
 ```
 
-Use `--minimal` to return the raw event objects without program enrichment.
+Use `--minimal` to return the raw event objects without program enrichment. Use `--full` to return the full enriched output. Use `--latest` for only the most recent event, or `--limit N` for the most recent N events. Use `--debug-preview` to log where preview HTML was discovered (stderr only).
 
-The user UUID is saved automatically after `checkins list`, or you can set it:
+If the user UUID is missing, `workout events` will attempt to discover it from check-ins and save it. You can also set it directly:
 
 - `KAHUNAS_USER_UUID=...`
 - `--user <uuid>`
