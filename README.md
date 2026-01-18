@@ -164,3 +164,4 @@ pnpm publish
 
 - This CLI uses the same APIs the web app uses; tokens can expire quickly.
 - Re-run any command (or `workout sync`) to refresh login when needed.
+- Informational logs are colorized; set `NO_COLOR=1` to disable colors.

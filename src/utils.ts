@@ -1,4 +1,5 @@
 import * as readline from "node:readline";
+import { logDebug } from "./logger";
 
 export function parseNumber(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -26,8 +27,5 @@ export function waitForEnter(prompt: string): Promise<void> {
 }
 
 export function debugLog(enabled: boolean, message: string): void {
-  if (!enabled) {
-    return;
-  }
-  console.error(`[debug] ${message}`);
+  logDebug(enabled, message);
 }

@@ -2,6 +2,7 @@
 import { isFlagEnabled, parseArgs } from "./args";
 import { handleCheckins } from "./commands/checkins";
 import { handleWorkout } from "./commands/workout";
+import { logError } from "./logger";
 import { printUsage } from "./usage";
 
 async function main(): Promise<void> {
@@ -38,6 +39,6 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
+  logError(message);
   process.exit(1);
 });

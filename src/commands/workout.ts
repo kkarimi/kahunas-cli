@@ -26,9 +26,10 @@ import {
   type WorkoutEvent
 } from "../events";
 import { fetchWorkoutProgram, getWithAuth, parseJsonText, postJson } from "../http";
+import { formatHeading, logInfo, logPlain } from "../logger";
 import { printResponse } from "../output";
 import { extractUserUuidFromCheckins, isTokenExpiredResponse } from "../responses";
-import { isLikelyLoginHtml } from "../tokens";
+import { isLikelyLoginHtml, resolveTokenExpiry } from "../tokens";
 import { askQuestion, debugLog } from "../utils";
 import {
   buildWorkoutPlanIndex,
@@ -411,9 +412,9 @@ export async function handleWorkout(
     }
 
     if (!rawOutput) {
-      console.log("Pick a workout program:");
+      logPlain(formatHeading("Pick a workout program:"));
       plans.forEach((plan, index) => {
-        console.log(`${index + 1}) ${formatWorkoutSummary(plan)}`);
+        logPlain(`${index + 1}) ${formatWorkoutSummary(plan)}`);
       });
     }
 
@@ -656,11 +657,15 @@ export async function handleWorkout(
       const freshConfig = readConfig();
       const lastSync = cache?.updatedAt ?? "none";
       const tokenExpiry = freshConfig.tokenExpiresAt ?? "unknown";
-      console.log(`Local workout server running at http://${host}:${port}`);
-      console.log(`JSON endpoint at http://${host}:${port}/api/workout`);
-      console.log(`Config: ${CONFIG_PATH}`);
-      console.log(`Last workout sync: ${lastSync}`);
-      console.log(`Token expiry: ${tokenExpiry}`);
+      const tokenUpdatedAt = freshConfig.tokenUpdatedAt ?? "unknown";
+      logInfo(`Local workout server running at http://${host}:${port}`);
+      logInfo(`JSON endpoint at http://${host}:${port}/api/workout`);
+      logInfo(`Config: ${CONFIG_PATH}`);
+      logInfo(`Last workout sync: ${lastSync}`);
+      logInfo(`Token expiry: ${tokenExpiry}`);
+      if (tokenExpiry === "unknown" && tokenUpdatedAt !== "unknown") {
+        logInfo(`Token updated at: ${tokenUpdatedAt}`);
+      }
     });
     return;
   }
@@ -670,6 +675,9 @@ export async function handleWorkout(
     const nextConfig = { ...config };
     if (captured.token) {
       nextConfig.token = captured.token;
+      const tokenUpdatedAt = new Date().toISOString();
+      nextConfig.tokenUpdatedAt = tokenUpdatedAt;
+      nextConfig.tokenExpiresAt = resolveTokenExpiry(captured.token, tokenUpdatedAt) ?? null;
     }
     if (captured.csrfToken) {
       nextConfig.csrfToken = captured.csrfToken;

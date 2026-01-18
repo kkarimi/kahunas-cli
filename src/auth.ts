@@ -2,7 +2,7 @@ import type { Page } from "playwright";
 import type { Config } from "./config";
 import { AUTH_PATH, readAuthConfig, resolveCsrfToken, resolveWebBaseUrl, writeConfig } from "./config";
 import { fetchAuthToken } from "./http";
-import { extractJwtExpiry, extractToken, isLikelyAuthToken } from "./tokens";
+import { extractToken, isLikelyAuthToken, resolveTokenExpiry } from "./tokens";
 import { debugLog, waitForEnter } from "./utils";
 import { extractWorkoutPlans, type WorkoutPlan } from "./workouts";
 
@@ -78,6 +78,12 @@ function normalizePath(pathname: string): string {
     return pathname;
   }
   return `/${pathname}`;
+}
+
+function normalizeToken(token: string): string {
+  const trimmed = token.trim();
+  const withoutQuotes = trimmed.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+  return withoutQuotes.replace(/^bearer\s+/i, "");
 }
 
 function resolveStoredAuth(): StoredAuth | undefined {
@@ -294,8 +300,9 @@ export async function captureWorkoutsFromBrowser(
     if (!candidate || observedToken) {
       return;
     }
-    if (isLikelyAuthToken(candidate)) {
-      observedToken = candidate;
+    const normalized = normalizeToken(candidate);
+    if (isLikelyAuthToken(normalized)) {
+      observedToken = normalized;
     }
   };
 
@@ -364,6 +371,21 @@ export async function captureWorkoutsFromBrowser(
     csrfCookie = cookies.find((cookie) => cookie.name === "csrf_kahunas_cookie_token")?.value;
     csrfToken = csrfCookie ?? resolveCsrfToken(options, config);
 
+    if (!observedToken && csrfToken && cookieHeader) {
+      try {
+        const { token: fetchedToken } = await fetchAuthToken(csrfToken, cookieHeader, webBaseUrl);
+        recordToken(fetchedToken);
+        debugLog(debug, "Fetched auth token via /get-token.");
+      } catch (error) {
+        debugLog(
+          debug,
+          `Failed to fetch auth token via /get-token: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`
+        );
+      }
+    }
+
     if (plans.length === 0) {
       await page.waitForTimeout(1500);
     }
@@ -391,8 +413,9 @@ export async function loginWithBrowser(
     if (!candidate || observedToken) {
       return;
     }
-    if (isLikelyAuthToken(candidate)) {
-      observedToken = candidate;
+    const normalized = normalizeToken(candidate);
+    if (isLikelyAuthToken(normalized)) {
+      observedToken = normalized;
     }
   };
 
@@ -479,7 +502,7 @@ export async function loginAndPersist(
 ): Promise<string> {
   const result = await loginWithBrowser(options, config);
   const tokenUpdatedAt = new Date().toISOString();
-  const tokenExpiresAt = extractJwtExpiry(result.token) ?? null;
+  const tokenExpiresAt = resolveTokenExpiry(result.token, tokenUpdatedAt) ?? null;
   const nextConfig: Config = {
     ...config,
     token: result.token,

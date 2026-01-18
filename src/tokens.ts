@@ -79,6 +79,20 @@ export function extractJwtExpiry(token: string): string | undefined {
   }
 }
 
+export const DEFAULT_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
+
+export function resolveTokenExpiry(token: string, tokenUpdatedAt: string): string | undefined {
+  const jwtExpiry = extractJwtExpiry(token);
+  if (jwtExpiry) {
+    return jwtExpiry;
+  }
+  const updatedAt = Date.parse(tokenUpdatedAt);
+  if (!Number.isFinite(updatedAt)) {
+    return undefined;
+  }
+  return new Date(updatedAt + DEFAULT_TOKEN_TTL_MS).toISOString();
+}
+
 function decodeBase64Url(value: string): string | undefined {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padding = normalized.length % 4;

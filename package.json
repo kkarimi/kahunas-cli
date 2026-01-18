@@ -30,6 +30,7 @@
   ],
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
+    "picocolors": "^1.1.1",
     "playwright": "^1.49.1"
   },
   "devDependencies": {
