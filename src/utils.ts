@@ -32,6 +32,26 @@ export function waitForEnter(
   return askQuestion(prompt, output).then(() => undefined);
 }
 
+export function askHiddenQuestion(
+  prompt: string,
+  output: NodeJS.WritableStream = process.stderr
+): Promise<string> {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output, terminal: true });
+    const writable = rl as readline.Interface & { _writeToOutput: (value: string) => void };
+    const originalWrite = writable._writeToOutput.bind(rl);
+    writable._writeToOutput = (value: string) => {
+      if (value.includes("\n") || value.includes("\r")) {
+        originalWrite(value);
+      }
+    };
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
 export function debugLog(enabled: boolean, message: string): void {
   logDebug(enabled, message);
 }

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { isFlagEnabled } from "../args";
+import type { AuthConfig } from "../config";
 import {
   readConfig,
   readAuthConfig,
@@ -33,7 +34,7 @@ import { formatHeading, logInfo, logPlain } from "../logger";
 import { printResponse } from "../output";
 import { extractUserUuidFromCheckins, isTokenExpiredResponse } from "../responses";
 import { isLikelyLoginHtml, resolveTokenExpiry } from "../tokens";
-import { askQuestion, debugLog } from "../utils";
+import { askHiddenQuestion, askQuestion, debugLog } from "../utils";
 import {
   buildWorkoutPlanIndex,
   extractWorkoutPlans,
@@ -339,6 +340,139 @@ export async function handleWorkout(
     return programDetails;
   };
 
+  const startWorkoutServer = async (): Promise<void> => {
+    const host = "127.0.0.1";
+    const port = 3000;
+    const limit = 1;
+    const cacheTtlMs = 30_000;
+
+    const loadSummary = async (): Promise<{
+      formatted: ReturnType<typeof formatWorkoutEventsOutput>;
+      days: ReturnType<typeof summarizeWorkoutProgramDays>;
+      summary?: ReturnType<typeof formatWorkoutEventsOutput>["events"][number];
+      timezone: string;
+    }> => {
+      const { text, payload, timezone } = await fetchWorkoutEventsPayload();
+      if (!Array.isArray(payload)) {
+        throw new Error(`Unexpected calendar response: ${text.slice(0, 200)}`);
+      }
+      const filtered = filterWorkoutEvents(payload);
+      const sorted = sortWorkoutEvents(filtered);
+      const bounded = limit > 0 ? sorted.slice(-limit) : sorted;
+      const programDetails = await buildProgramDetails(sorted);
+      const formatted = formatWorkoutEventsOutput(bounded, programDetails, {
+        timezone,
+        program: undefined,
+        workout: undefined
+      });
+      const summary = formatted.events[0];
+      const programUuid =
+        summary?.program?.uuid ??
+        (bounded[0] && typeof bounded[0] === "object"
+          ? ((bounded[0] as Record<string, unknown>).program as string | undefined)
+          : undefined);
+      const program = programUuid ? programDetails[programUuid] : undefined;
+      const days = summarizeWorkoutProgramDays(program);
+      return { formatted, days, summary, timezone };
+    };
+
+    let cached:
+      | {
+          data: Awaited<ReturnType<typeof loadSummary>>;
+          fetchedAt: number;
+        }
+      | undefined;
+    let summaryInFlight: Promise<Awaited<ReturnType<typeof loadSummary>>> | null = null;
+
+    const getSummary = async (
+      forceRefresh: boolean
+    ): Promise<Awaited<ReturnType<typeof loadSummary>>> => {
+      if (!forceRefresh && cached && Date.now() - cached.fetchedAt < cacheTtlMs) {
+        return cached.data;
+      }
+      if (!forceRefresh && summaryInFlight) {
+        return summaryInFlight;
+      }
+      const pending = loadSummary().finally(() => {
+        summaryInFlight = null;
+      });
+      summaryInFlight = pending;
+      const data = await pending;
+      cached = { data, fetchedAt: Date.now() };
+      return data;
+    };
+
+    const server = createServer(async (req, res) => {
+      try {
+        const url = new URL(req.url ?? "/", `http://${host}:${port}`);
+        const wantsRefresh = url.searchParams.get("refresh") === "1";
+
+        if (url.pathname === "/api/workout") {
+          const data = await getSummary(wantsRefresh);
+          res.statusCode = 200;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.setHeader("cache-control", "no-store");
+          res.end(JSON.stringify(data.formatted, null, 2));
+          return;
+        }
+
+        if (url.pathname === "/favicon.ico") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
+        if (url.pathname !== "/") {
+          res.statusCode = 404;
+          res.end("Not found");
+          return;
+        }
+
+        const data = await getSummary(wantsRefresh);
+        const dayParam = url.searchParams.get("day");
+        const selectedDayIndex = resolveSelectedDayIndex(
+          data.days,
+          data.summary?.workout_day?.day_index,
+          data.summary?.workout_day?.day_label,
+          dayParam
+        );
+        const html = renderWorkoutPage({
+          summary: data.summary,
+          days: data.days,
+          selectedDayIndex,
+          timezone: data.timezone,
+          apiPath: "/api/workout",
+          refreshPath: "/?refresh=1",
+          isLatest: limit === 1
+        });
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/html; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(html);
+      } catch (error) {
+        res.statusCode = 500;
+        res.setHeader("content-type", "text/plain; charset=utf-8");
+        res.end(error instanceof Error ? error.message : "Server error");
+      }
+    });
+
+    server.listen(port, host, () => {
+      const cache = readWorkoutCache();
+      const freshConfig = readConfig();
+      const lastSync = cache?.updatedAt ?? "none";
+      const tokenExpiry = freshConfig.tokenExpiresAt ?? "unknown";
+      const tokenUpdatedAt = freshConfig.tokenUpdatedAt ?? "unknown";
+      logInfo(`Local workout server running at http://${host}:${port}`);
+      logInfo(`JSON endpoint at http://${host}:${port}/api/workout`);
+      logInfo(`Config: ${CONFIG_PATH}`);
+      logInfo(`Last workout sync: ${lastSync}`);
+      logInfo(`Token expiry: ${tokenExpiry}`);
+      if (tokenExpiry === "unknown" && tokenUpdatedAt !== "unknown") {
+        logInfo(`Token updated at: ${tokenUpdatedAt}`);
+      }
+    });
+  };
+
   const resolveSelectedDayIndex = (
     days: ReturnType<typeof summarizeWorkoutProgramDays>,
     eventDayIndex: number | undefined,
@@ -542,134 +676,7 @@ export async function handleWorkout(
   }
 
   if (action === "serve") {
-    const host = "127.0.0.1";
-    const port = 3000;
-    const limit = 1;
-    const cacheTtlMs = 30_000;
-
-    const loadSummary = async (): Promise<{
-      formatted: ReturnType<typeof formatWorkoutEventsOutput>;
-      days: ReturnType<typeof summarizeWorkoutProgramDays>;
-      summary?: ReturnType<typeof formatWorkoutEventsOutput>["events"][number];
-      timezone: string;
-    }> => {
-      const { text, payload, timezone } = await fetchWorkoutEventsPayload();
-      if (!Array.isArray(payload)) {
-        throw new Error(`Unexpected calendar response: ${text.slice(0, 200)}`);
-      }
-      const filtered = filterWorkoutEvents(payload);
-      const sorted = sortWorkoutEvents(filtered);
-      const bounded = limit > 0 ? sorted.slice(-limit) : sorted;
-      const programDetails = await buildProgramDetails(sorted);
-      const formatted = formatWorkoutEventsOutput(bounded, programDetails, {
-        timezone,
-        program: undefined,
-        workout: undefined
-      });
-      const summary = formatted.events[0];
-      const programUuid =
-        summary?.program?.uuid ??
-        (bounded[0] && typeof bounded[0] === "object"
-          ? ((bounded[0] as Record<string, unknown>).program as string | undefined)
-          : undefined);
-      const program = programUuid ? programDetails[programUuid] : undefined;
-      const days = summarizeWorkoutProgramDays(program);
-      return { formatted, days, summary, timezone };
-    };
-
-    let cached:
-      | {
-          data: Awaited<ReturnType<typeof loadSummary>>;
-          fetchedAt: number;
-        }
-      | undefined;
-    let summaryInFlight: Promise<Awaited<ReturnType<typeof loadSummary>>> | null = null;
-
-    const getSummary = async (forceRefresh: boolean): Promise<Awaited<ReturnType<typeof loadSummary>>> => {
-      if (!forceRefresh && cached && Date.now() - cached.fetchedAt < cacheTtlMs) {
-        return cached.data;
-      }
-      if (!forceRefresh && summaryInFlight) {
-        return summaryInFlight;
-      }
-      const pending = loadSummary().finally(() => {
-        summaryInFlight = null;
-      });
-      summaryInFlight = pending;
-      const data = await pending;
-      cached = { data, fetchedAt: Date.now() };
-      return data;
-    };
-
-    const server = createServer(async (req, res) => {
-      try {
-        const url = new URL(req.url ?? "/", `http://${host}:${port}`);
-        const wantsRefresh = url.searchParams.get("refresh") === "1";
-
-        if (url.pathname === "/api/workout") {
-          const data = await getSummary(wantsRefresh);
-          res.statusCode = 200;
-          res.setHeader("content-type", "application/json; charset=utf-8");
-          res.setHeader("cache-control", "no-store");
-          res.end(JSON.stringify(data.formatted, null, 2));
-          return;
-        }
-
-        if (url.pathname === "/favicon.ico") {
-          res.statusCode = 204;
-          res.end();
-          return;
-        }
-
-        if (url.pathname !== "/") {
-          res.statusCode = 404;
-          res.end("Not found");
-          return;
-        }
-
-        const data = await getSummary(wantsRefresh);
-        const dayParam = url.searchParams.get("day");
-        const selectedDayIndex = resolveSelectedDayIndex(
-          data.days,
-          data.summary?.workout_day?.day_index,
-          data.summary?.workout_day?.day_label,
-          dayParam
-        );
-        const html = renderWorkoutPage({
-          summary: data.summary,
-          days: data.days,
-          selectedDayIndex,
-          timezone: data.timezone,
-          apiPath: "/api/workout",
-          refreshPath: "/?refresh=1",
-          isLatest: limit === 1
-        });
-        res.statusCode = 200;
-        res.setHeader("content-type", "text/html; charset=utf-8");
-        res.setHeader("cache-control", "no-store");
-        res.end(html);
-      } catch (error) {
-        res.statusCode = 500;
-        res.setHeader("content-type", "text/plain; charset=utf-8");
-        res.end(error instanceof Error ? error.message : "Server error");
-      }
-    });
-
-    server.listen(port, host, () => {
-      const cache = readWorkoutCache();
-      const freshConfig = readConfig();
-      const lastSync = cache?.updatedAt ?? "none";
-      const tokenExpiry = freshConfig.tokenExpiresAt ?? "unknown";
-      const tokenUpdatedAt = freshConfig.tokenUpdatedAt ?? "unknown";
-      logInfo(`Local workout server running at http://${host}:${port}`);
-      logInfo(`JSON endpoint at http://${host}:${port}/api/workout`);
-      logInfo(`Config: ${CONFIG_PATH}`);
-      logInfo(`Last workout sync: ${lastSync}`);
-      logInfo(`Token expiry: ${tokenExpiry}`);
-      if (tokenExpiry === "unknown" && tokenUpdatedAt !== "unknown") {
-        logInfo(`Token updated at: ${tokenUpdatedAt}`);
-      }
-    });
+    await startWorkoutServer();
     return;
   }
 
@@ -682,6 +689,7 @@ export async function handleWorkout(
     const tokenUpdatedAt = config.tokenUpdatedAt ?? undefined;
     const tokenExpiry = token && tokenUpdatedAt ? resolveTokenExpiry(token, tokenUpdatedAt) : null;
     const hasValidToken = !!tokenExpiry && Date.now() < Date.parse(tokenExpiry);
+    let pendingAuth: AuthConfig | undefined;
 
     if (!hasValidToken && !hasAuthConfig) {
       if (!process.stdin.isTTY) {
@@ -693,20 +701,19 @@ export async function handleWorkout(
       if (!login) {
         throw new Error("Missing email/username for login.");
       }
-      const password = await askQuestion("Password: ", process.stderr);
+      const password = await askHiddenQuestion("Password: ", process.stderr);
       if (!password) {
         throw new Error("Missing password for login.");
       }
       const isEmail = login.includes("@");
-      writeAuthConfig({
+      pendingAuth = {
         email: isEmail ? login : undefined,
         username: isEmail ? undefined : login,
         password
-      });
-      console.error(`Saved credentials to ${AUTH_PATH}`);
+      };
     }
 
-    const captured = await captureWorkoutsFromBrowser(options, config);
+    const captured = await captureWorkoutsFromBrowser(options, config, pendingAuth);
     const nextConfig = { ...config };
     if (captured.token) {
       nextConfig.token = captured.token;
@@ -742,10 +749,16 @@ export async function handleWorkout(
         2
       )
     );
+    if (pendingAuth && captured.token) {
+      writeAuthConfig(pendingAuth);
+      console.error(`Saved credentials to ${AUTH_PATH}`);
+    } else if (pendingAuth) {
+      console.error("Login was not detected; credentials were not saved.");
+    }
     if (process.stdin.isTTY) {
       const answer = await askQuestion("Start the preview server now? (y/N): ", process.stderr);
       if (answer.toLowerCase().startsWith("y")) {
-        await handleWorkout(["serve"], options);
+        await startWorkoutServer();
       }
     }
     return;

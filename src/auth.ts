@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import type { Config } from "./config";
+import type { AuthConfig, Config } from "./config";
 import { AUTH_PATH, readAuthConfig, resolveCsrfToken, resolveWebBaseUrl, writeConfig } from "./config";
 import { fetchAuthToken } from "./http";
 import { extractToken, isLikelyAuthToken, resolveTokenExpiry } from "./tokens";
@@ -86,8 +86,8 @@ function normalizeToken(token: string): string {
   return withoutQuotes.replace(/^bearer\s+/i, "");
 }
 
-function resolveStoredAuth(): StoredAuth | undefined {
-  const auth = readAuthConfig();
+function resolveStoredAuth(override?: AuthConfig): StoredAuth | undefined {
+  const auth = override ?? readAuthConfig();
   if (!auth) {
     return undefined;
   }
@@ -282,12 +282,13 @@ async function triggerWorkoutCapture(
 
 export async function captureWorkoutsFromBrowser(
   options: Record<string, string>,
-  config: Config
+  config: Config,
+  authOverride?: AuthConfig
 ): Promise<BrowserWorkoutCapture> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
   const headless = config.headless ?? true;
   const debug = config.debug === true;
-  const storedAuth = resolveStoredAuth();
+  const storedAuth = resolveStoredAuth(authOverride);
 
   const playwright = await import("playwright");
   const browser = await playwright.chromium.launch({ headless });

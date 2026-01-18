@@ -29,7 +29,7 @@ pnpm kahunas serve
 
 Open `http://127.0.0.1:3000`.
 
-If `auth.json` is missing, `sync` will prompt for credentials and save them.
+If `auth.json` is missing, `sync` will prompt for credentials and save them after a successful login.
 
 ## Advanced usage
 
