@@ -58,3 +58,35 @@ export function isLikelyLoginHtml(text: string): boolean {
     trimmed.includes("<title>kahunas")
   );
 }
+
+export function extractJwtExpiry(token: string): string | undefined {
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return undefined;
+  }
+  const payload = decodeBase64Url(parts[1]);
+  if (!payload) {
+    return undefined;
+  }
+  try {
+    const data = JSON.parse(payload) as { exp?: unknown };
+    if (typeof data.exp !== "number" || !Number.isFinite(data.exp)) {
+      return undefined;
+    }
+    return new Date(data.exp * 1000).toISOString();
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeBase64Url(value: string): string | undefined {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = normalized.length % 4;
+  const padded =
+    padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
+  try {
+    return Buffer.from(padded, "base64").toString("utf-8");
+  } catch {
+    return undefined;
+  }
+}

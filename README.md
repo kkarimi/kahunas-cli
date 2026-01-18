@@ -16,9 +16,9 @@ pnpm build
 2) Fetch data (browser login opens automatically on first run):
 
 ```bash
-pnpm kahunas -- checkins list
-pnpm kahunas -- workout list
-pnpm kahunas -- workout pick
+pnpm kahunas checkins list
+pnpm kahunas workout list
+pnpm kahunas workout pick
 ```
 
 You can also run without installing globally:
@@ -55,7 +55,13 @@ npx kahunas-cli workout events
 If the API list is missing a program you see in the web UI, run:
 
 ```bash
-pnpm kahunas -- workout sync
+pnpm kahunas sync
+```
+
+Or:
+
+```bash
+pnpm kahunas workout sync
 ```
 
 This opens a browser, you log in, then navigate to your workouts page. After you press Enter, the CLI captures the workout list from network responses and writes a cache:
@@ -70,7 +76,7 @@ Raw output (`--raw`) prints the API response only.
 To see when workouts happened, the calendar endpoint returns log events with timestamps. The CLI returns the latest event summarized into a human-friendly structure (total volume sets, exercises, supersets). Use `--full` to return the full program payload (best effort; falls back to cached summary if needed).
 
 ```bash
-pnpm kahunas -- workout events
+pnpm kahunas workout events
 ```
 
 Use `--minimal` to return the raw event objects without program enrichment. Use `--full` for full enriched output. Use `--debug-preview` to log where preview HTML was discovered (stderr only).
@@ -82,13 +88,13 @@ If the user UUID is missing, `workout events` will attempt to discover it from c
 Run a local dev server to preview workouts in a browser:
 
 ```bash
-pnpm kahunas -- serve
+pnpm kahunas serve
 ```
 
 Or:
 
 ```bash
-pnpm kahunas -- workout serve
+pnpm kahunas workout serve
 ```
 
 The HTML page is available at `http://127.0.0.1:3000` and the JSON endpoint is at `http://127.0.0.1:3000/api/workout`.

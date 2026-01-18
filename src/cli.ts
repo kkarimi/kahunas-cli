@@ -19,6 +19,9 @@ async function main(): Promise<void> {
     case "checkins":
       await handleCheckins(rest, options);
       return;
+    case "sync":
+      await handleWorkout(["sync", ...rest], options);
+      return;
     case "serve":
       await handleWorkout(["serve", ...rest], options);
       return;

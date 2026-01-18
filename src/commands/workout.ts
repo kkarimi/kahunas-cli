@@ -650,9 +650,15 @@ export async function handleWorkout(
     });
 
     server.listen(port, host, () => {
+      const cache = readWorkoutCache();
+      const freshConfig = readConfig();
+      const lastSync = cache?.updatedAt ?? "none";
+      const tokenExpiry = freshConfig.tokenExpiresAt ?? "unknown";
       console.log(`Local workout server running at http://${host}:${port}`);
       console.log(`JSON endpoint at http://${host}:${port}/api/workout`);
       console.log(`Config: ${CONFIG_PATH}`);
+      console.log(`Last workout sync: ${lastSync}`);
+      console.log(`Token expiry: ${tokenExpiry}`);
     });
     return;
   }

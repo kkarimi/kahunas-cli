@@ -1,7 +1,7 @@
 import type { Config } from "./config";
 import { resolveCsrfToken, resolveWebBaseUrl, writeConfig } from "./config";
 import { fetchAuthToken } from "./http";
-import { extractToken, isLikelyAuthToken } from "./tokens";
+import { extractJwtExpiry, extractToken, isLikelyAuthToken } from "./tokens";
 import { waitForEnter } from "./utils";
 import { extractWorkoutPlans, type WorkoutPlan } from "./workouts";
 
@@ -196,10 +196,14 @@ export async function loginAndPersist(
   outputMode: "silent" | "token" | "raw"
 ): Promise<string> {
   const result = await loginWithBrowser(options, config);
+  const tokenUpdatedAt = new Date().toISOString();
+  const tokenExpiresAt = extractJwtExpiry(result.token) ?? null;
   const nextConfig: Config = {
     ...config,
     token: result.token,
-    webBaseUrl: result.webBaseUrl
+    webBaseUrl: result.webBaseUrl,
+    tokenUpdatedAt,
+    tokenExpiresAt
   };
   if (result.csrfToken) {
     nextConfig.csrfToken = result.csrfToken;

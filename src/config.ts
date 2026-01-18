@@ -22,6 +22,8 @@ export type Config = {
   authCookie?: string;
   csrfCookie?: string;
   userUuid?: string;
+  tokenUpdatedAt?: string;
+  tokenExpiresAt?: string | null;
 };
 
 export type WorkoutCache = {
