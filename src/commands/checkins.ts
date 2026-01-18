@@ -1,9 +1,8 @@
-import { isFlagEnabled, shouldAutoLogin } from "../args";
+import { isFlagEnabled } from "../args";
 import { readConfig, resolveBaseUrl, resolveToken, writeConfig } from "../config";
 import { postJson } from "../http";
 import { printResponse } from "../output";
 import { extractUserUuidFromCheckins, isTokenExpiredResponse } from "../responses";
-import { parseNumber } from "../utils";
 import { loginAndPersist } from "../auth";
 import { printUsage } from "../usage";
 
@@ -22,19 +21,21 @@ export async function handleCheckins(
   }
 
   const config = readConfig();
-  const autoLogin = shouldAutoLogin(options, true);
+  const autoLogin = true;
   let token = resolveToken(options, config);
   if (!token) {
     if (autoLogin) {
       token = await loginAndPersist(options, config, "silent");
     } else {
-      throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
+      throw new Error(
+        "Missing auth token. Run 'kahunas workout sync' to refresh login, then try again."
+      );
     }
   }
 
   const baseUrl = resolveBaseUrl(options, config);
-  const page = parseNumber(options.page, 1);
-  const rpp = parseNumber(options.rpp, 12);
+  const page = 1;
+  const rpp = 12;
   const rawOutput = isFlagEnabled(options, "raw");
 
   let response = await postJson("/api/v2/checkin/list", token, baseUrl, { page, rpp });

@@ -13,13 +13,7 @@ pnpm install
 pnpm build
 ```
 
-2) Log in once (opens a browser):
-
-```bash
-pnpm kahunas -- auth login
-```
-
-3) Fetch data:
+2) Fetch data (browser login opens automatically on first run):
 
 ```bash
 pnpm kahunas -- checkins list
@@ -35,19 +29,6 @@ npx kahunas-cli workout events
 ```
 
 ## Commands
-
-### Auth
-
-- `kahunas auth login`
-  - Opens a browser, lets you log in, and saves the `auth-user-token`.
-- `kahunas auth status`
-  - Checks whether the stored token is valid.
-- `kahunas auth show`
-  - Prints the stored token.
-
-Tokens are saved to:
-
-- `~/.config/kahunas/config.json`
 
 ### Check-ins
 
@@ -86,76 +67,42 @@ Raw output (`--raw`) prints the API response only.
 
 ### Workout events (dates)
 
-To see when workouts happened, the calendar endpoint returns log events with timestamps. By default each event is summarized into a human-friendly structure (total volume sets, exercises, supersets). Use `--full` to return the full program payload (best effort; falls back to cached summary if needed).
-
-```bash
-pnpm kahunas -- workout events --user <user-uuid>
-```
-
-Or via pnpm:
+To see when workouts happened, the calendar endpoint returns log events with timestamps. The CLI returns the latest event summarized into a human-friendly structure (total volume sets, exercises, supersets). Use `--full` to return the full program payload (best effort; falls back to cached summary if needed).
 
 ```bash
 pnpm kahunas -- workout events
 ```
 
-Default timezone is `Europe/London`. Override with `--timezone`.
+Use `--minimal` to return the raw event objects without program enrichment. Use `--full` for full enriched output. Use `--debug-preview` to log where preview HTML was discovered (stderr only).
 
-You can filter by program or workout UUID:
-
-```bash
-pnpm kahunas -- workout events --program <program-uuid>
-pnpm kahunas -- workout events --workout <workout-uuid>
-```
-
-Use `--minimal` to return the raw event objects without program enrichment. Use `--full` to return the full enriched output. Use `--latest` for only the most recent event, or `--limit N` for the most recent N events. Use `--debug-preview` to log where preview HTML was discovered (stderr only).
-
-If the user UUID is missing, `workout events` will attempt to discover it from check-ins and save it. You can also set it directly:
-
-- `KAHUNAS_USER_UUID=...`
-- `--user <uuid>`
+If the user UUID is missing, `workout events` will attempt to discover it from check-ins and save it.
 
 ### Workout preview server
 
 Run a local dev server to preview workouts in a browser:
 
 ```bash
+pnpm kahunas -- serve
+```
+
+Or:
+
+```bash
 pnpm kahunas -- workout serve
 ```
 
 The HTML page is available at `http://127.0.0.1:3000` and the JSON endpoint is at `http://127.0.0.1:3000/api/workout`.
-The JSON response matches the CLI output for `workout events --latest`, so there is only one data shape to maintain.
-
-Options:
-
-```bash
-pnpm kahunas -- workout serve --program <program-uuid>
-pnpm kahunas -- workout serve --workout <workout-uuid>
-pnpm kahunas -- workout serve --limit 3
-```
+The JSON response matches the CLI output for `workout events`, so there is only one data shape to maintain.
 
 Use `?day=<index>` to switch the selected workout day tab in the browser.
 
 ## Auto-login
 
-Most commands auto-login by default if a token is missing or expired. To disable:
-
-```bash
-pnpm kahunas -- checkins list --no-auto-login
-```
+Most commands auto-login if a token is missing or expired. This opens a browser and saves session details in `~/.config/kahunas/config.json`.
 
 ## Flags
 
 - `--raw` prints raw API responses (no formatting).
-- `--headless` runs Playwright without a visible browser window.
-
-## Environment variables
-
-- `KAHUNAS_TOKEN`
-- `KAHUNAS_CSRF`
-- `KAHUNAS_CSRF_COOKIE`
-- `KAHUNAS_COOKIE`
-- `KAHUNAS_WEB_BASE_URL`
-- `KAHUNAS_USER_UUID`
 
 ## Playwright
 
@@ -184,5 +131,4 @@ pnpm publish
 ## Notes
 
 - This CLI uses the same APIs the web app uses; tokens can expire quickly.
-- `auth login` is the most reliable way to refresh the token.
-- `workout events` relies on session cookies captured during `auth login`.
+- Re-run any command (or `workout sync`) to refresh login when needed.

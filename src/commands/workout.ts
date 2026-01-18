@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { isFlagEnabled, shouldAutoLogin } from "../args";
+import { isFlagEnabled } from "../args";
 import {
   readConfig,
   readWorkoutCache,
@@ -12,6 +12,7 @@ import {
   resolveWebBaseUrl,
   writeConfig,
   writeWorkoutCache,
+  CONFIG_PATH,
   WORKOUT_CACHE_PATH
 } from "../config";
 import {
@@ -28,7 +29,7 @@ import { fetchWorkoutProgram, getWithAuth, parseJsonText, postJson } from "../ht
 import { printResponse } from "../output";
 import { extractUserUuidFromCheckins, isTokenExpiredResponse } from "../responses";
 import { isLikelyLoginHtml } from "../tokens";
-import { askQuestion, parseNumber } from "../utils";
+import { askQuestion } from "../utils";
 import {
   buildWorkoutPlanIndex,
   extractWorkoutPlans,
@@ -52,14 +53,16 @@ export async function handleWorkout(
   }
 
   const config = readConfig();
-  const autoLogin = shouldAutoLogin(options, true);
+  const autoLogin = true;
   let token = resolveToken(options, config);
   const ensureToken = async (): Promise<string> => {
     if (!token) {
       if (autoLogin) {
         token = await loginAndPersist(options, config, "silent");
       } else {
-        throw new Error("Missing auth token. Set KAHUNAS_TOKEN or run 'kahunas auth login'.");
+        throw new Error(
+          "Missing auth token. Run 'kahunas workout sync' to refresh login, then try again."
+        );
       }
     }
     return token;
@@ -81,9 +84,9 @@ export async function handleWorkout(
 
   const baseUrl = resolveBaseUrl(options, config);
   const rawOutput = isFlagEnabled(options, "raw");
-  const page = parseNumber(options.page, 1);
-  const rpp = parseNumber(options.rpp, 12);
-  const listRpp = action === "latest" && options.rpp === undefined ? 100 : rpp;
+  const page = 1;
+  const rpp = 12;
+  const listRpp = action === "latest" ? 100 : rpp;
 
   const fetchList = async (): Promise<{
     response: { ok: boolean; status: number; text: string; json?: unknown };
@@ -120,10 +123,7 @@ export async function handleWorkout(
     const baseWebUrl = resolveWebBaseUrl(options, config);
     const webOrigin = new URL(baseWebUrl).origin;
     const timezone =
-      options.timezone ??
-      process.env.TZ ??
-      Intl.DateTimeFormat().resolvedOptions().timeZone ??
-      "Europe/London";
+      process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "Europe/London";
     let userUuid = resolveUserUuid(options, config);
     if (!userUuid) {
       try {
@@ -153,7 +153,9 @@ export async function handleWorkout(
       }
     }
     if (!userUuid) {
-      throw new Error("Missing user uuid. Use --user or run 'kahunas checkins list' once.");
+      throw new Error(
+        "Missing user uuid. Run 'kahunas checkins list' or 'kahunas workout sync' once."
+      );
     }
     if (userUuid !== config.userUuid) {
       writeConfig({ ...config, userUuid });
@@ -180,10 +182,10 @@ export async function handleWorkout(
     }
 
     if (!effectiveCsrfToken) {
-      throw new Error("Missing CSRF token. Run 'kahunas auth login' and try again.");
+      throw new Error("Missing CSRF token. Run 'kahunas workout sync' and try again.");
     }
     if (!cookieHeader) {
-      throw new Error("Missing cookies. Run 'kahunas auth login' and try again.");
+      throw new Error("Missing cookies. Run 'kahunas workout sync' and try again.");
     }
 
     const url = new URL(`/coach/clients/calendar/getEvent/${userUuid}`, webOrigin);
@@ -191,7 +193,7 @@ export async function handleWorkout(
 
     const body = new URLSearchParams();
     body.set("csrf_kahunas_token", effectiveCsrfToken);
-    body.set("filter", options.filter ?? "");
+    body.set("filter", "");
 
     let response = await fetch(url.toString(), {
       method: "POST",
@@ -221,7 +223,7 @@ export async function handleWorkout(
         authCookie ??
         (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
       if (!effectiveCsrfToken || !cookieHeader) {
-        throw new Error("Login required. Run 'kahunas auth login' and try again.");
+        throw new Error("Login required. Run 'kahunas workout sync' and try again.");
       }
       const retry = await fetch(url.toString(), {
         method: "POST",
@@ -475,8 +477,7 @@ export async function handleWorkout(
     const minimal = isFlagEnabled(options, "minimal");
     const full = isFlagEnabled(options, "full");
     const debugPreview = isFlagEnabled(options, "debug-preview");
-    const latest = isFlagEnabled(options, "latest") || isFlagEnabled(options, "last");
-    const limit = latest ? 1 : parseNumber(options.limit, 0);
+    const limit = 1;
 
     const { text, payload, timezone } = await fetchWorkoutEventsPayload();
     if (rawOutput) {
@@ -488,7 +489,7 @@ export async function handleWorkout(
       return;
     }
 
-    const filtered = filterWorkoutEvents(payload, options.program, options.workout);
+    const filtered = filterWorkoutEvents(payload);
     const sorted = sortWorkoutEvents(filtered);
     const limited = limit > 0 ? sorted.slice(-limit) : sorted;
 
@@ -527,18 +528,18 @@ export async function handleWorkout(
 
     const formatted = formatWorkoutEventsOutput(limited, programDetails, {
       timezone,
-      program: options.program,
-      workout: options.workout
+      program: undefined,
+      workout: undefined
     });
     console.log(JSON.stringify(formatted, null, 2));
     return;
   }
 
   if (action === "serve") {
-    const host = options.host ?? "127.0.0.1";
-    const port = parseNumber(options.port, 3000);
-    const limit = parseNumber(options.limit, 1);
-    const cacheTtlMs = parseNumber(options["cache-ttl"], 30_000);
+    const host = "127.0.0.1";
+    const port = 3000;
+    const limit = 1;
+    const cacheTtlMs = 30_000;
 
     const loadSummary = async (): Promise<{
       formatted: ReturnType<typeof formatWorkoutEventsOutput>;
@@ -550,14 +551,14 @@ export async function handleWorkout(
       if (!Array.isArray(payload)) {
         throw new Error(`Unexpected calendar response: ${text.slice(0, 200)}`);
       }
-      const filtered = filterWorkoutEvents(payload, options.program, options.workout);
+      const filtered = filterWorkoutEvents(payload);
       const sorted = sortWorkoutEvents(filtered);
       const bounded = limit > 0 ? sorted.slice(-limit) : sorted;
       const programDetails = await buildProgramDetails(sorted);
       const formatted = formatWorkoutEventsOutput(bounded, programDetails, {
         timezone,
-        program: options.program,
-        workout: options.workout
+        program: undefined,
+        workout: undefined
       });
       const summary = formatted.events[0];
       const programUuid =
@@ -651,6 +652,7 @@ export async function handleWorkout(
     server.listen(port, host, () => {
       console.log(`Local workout server running at http://${host}:${port}`);
       console.log(`JSON endpoint at http://${host}:${port}/api/workout`);
+      console.log(`Config: ${CONFIG_PATH}`);
     });
     return;
   }

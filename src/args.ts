@@ -38,13 +38,3 @@ export function isFlagEnabled(options: Record<string, string>, name: string): bo
   const value = options[name];
   return value === "true" || value === "1" || value === "yes";
 }
-
-export function shouldAutoLogin(options: Record<string, string>, defaultValue: boolean): boolean {
-  if (isFlagEnabled(options, "auto-login")) {
-    return true;
-  }
-  if (isFlagEnabled(options, "no-auto-login")) {
-    return false;
-  }
-  return defaultValue;
-}

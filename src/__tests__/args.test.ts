@@ -1,23 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { isFlagEnabled, parseArgs, shouldAutoLogin } from "../args";
+import { isFlagEnabled, parseArgs } from "../args";
 
 describe("parseArgs", () => {
   it("parses positionals and boolean flags", () => {
-    const parsed = parseArgs(["auth", "login", "--headless"]);
-    expect(parsed.positionals).toEqual(["auth", "login"]);
-    expect(parsed.options).toEqual({ headless: "true" });
+    const parsed = parseArgs(["workout", "events", "--debug-preview"]);
+    expect(parsed.positionals).toEqual(["workout", "events"]);
+    expect(parsed.options).toEqual({ "debug-preview": "true" });
   });
 
   it("parses key-value options", () => {
-    const parsed = parseArgs([
-      "workout",
-      "events",
-      "--timezone",
-      "Europe/London",
-      "--program=abc"
-    ]);
+    const parsed = parseArgs(["workout", "events", "--note", "hello", "--tag=fast"]);
     expect(parsed.positionals).toEqual(["workout", "events"]);
-    expect(parsed.options).toEqual({ timezone: "Europe/London", program: "abc" });
+    expect(parsed.options).toEqual({ note: "hello", tag: "fast" });
   });
 });
 
@@ -27,17 +21,5 @@ describe("isFlagEnabled", () => {
     expect(isFlagEnabled({ flag: "1" }, "flag")).toBe(true);
     expect(isFlagEnabled({ flag: "yes" }, "flag")).toBe(true);
     expect(isFlagEnabled({ flag: "false" }, "flag")).toBe(false);
-  });
-});
-
-describe("shouldAutoLogin", () => {
-  it("uses default when flags are absent", () => {
-    expect(shouldAutoLogin({}, true)).toBe(true);
-    expect(shouldAutoLogin({}, false)).toBe(false);
-  });
-
-  it("respects override flags", () => {
-    expect(shouldAutoLogin({ "auto-login": "true" }, false)).toBe(true);
-    expect(shouldAutoLogin({ "no-auto-login": "true" }, true)).toBe(false);
   });
 });

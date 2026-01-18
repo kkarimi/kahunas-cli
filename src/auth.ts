@@ -1,4 +1,3 @@
-import { isFlagEnabled } from "./args";
 import type { Config } from "./config";
 import { resolveCsrfToken, resolveWebBaseUrl, writeConfig } from "./config";
 import { fetchAuthToken } from "./http";
@@ -29,7 +28,7 @@ export async function captureWorkoutsFromBrowser(
   config: Config
 ): Promise<BrowserWorkoutCapture> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
-  const headless = isFlagEnabled(options, "headless");
+  const headless = false;
 
   const playwright = await import("playwright");
   const browser = await playwright.chromium.launch({ headless });
@@ -113,7 +112,7 @@ export async function loginWithBrowser(
   config: Config
 ): Promise<LoginResult> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
-  const headless = isFlagEnabled(options, "headless");
+  const headless = false;
 
   const playwright = await import("playwright");
   const browser = await playwright.chromium.launch({ headless });
@@ -167,7 +166,7 @@ export async function loginWithBrowser(
     let raw: string | undefined;
     if (!observedToken) {
       if (!csrfToken) {
-        throw new Error("Missing CSRF token after login. Try again or provide --csrf.");
+        throw new Error("Missing CSRF token after login. Try again or run 'kahunas workout sync'.");
       }
       if (!cookieHeader) {
         throw new Error("Missing cookies after login. Try again.");

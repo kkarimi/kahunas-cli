@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { isFlagEnabled, parseArgs } from "./args";
-import { handleAuth } from "./commands/auth";
 import { handleCheckins } from "./commands/checkins";
 import { handleWorkout } from "./commands/workout";
 import { printUsage } from "./usage";
@@ -17,11 +16,11 @@ async function main(): Promise<void> {
   const rest = positionals.slice(1);
 
   switch (command) {
-    case "auth":
-      await handleAuth(rest, options);
-      return;
     case "checkins":
       await handleCheckins(rest, options);
+      return;
+    case "serve":
+      await handleWorkout(["serve", ...rest], options);
       return;
     case "workout":
       await handleWorkout(rest, options);

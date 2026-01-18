@@ -68,35 +68,30 @@ export function writeWorkoutCache(plans: WorkoutPlan[]): WorkoutCache {
   return cache;
 }
 
-export function resolveToken(options: Record<string, string>, config: Config): string | undefined {
-  return options.token ?? process.env.KAHUNAS_TOKEN ?? config.token;
+export function resolveToken(_: Record<string, string>, config: Config): string | undefined {
+  return config.token;
 }
 
-export function resolveCsrfToken(options: Record<string, string>, config: Config): string | undefined {
-  return options.csrf ?? process.env.KAHUNAS_CSRF ?? config.csrfToken;
+export function resolveCsrfToken(_: Record<string, string>, config: Config): string | undefined {
+  return config.csrfToken;
 }
 
-export function resolveCsrfCookie(options: Record<string, string>, config: Config): string | undefined {
-  return options["csrf-cookie"] ?? process.env.KAHUNAS_CSRF_COOKIE ?? config.csrfCookie;
+export function resolveCsrfCookie(_: Record<string, string>, config: Config): string | undefined {
+  return config.csrfCookie;
 }
 
-export function resolveAuthCookie(options: Record<string, string>, config: Config): string | undefined {
-  return options.cookie ?? process.env.KAHUNAS_COOKIE ?? config.authCookie;
+export function resolveAuthCookie(_: Record<string, string>, config: Config): string | undefined {
+  return config.authCookie;
 }
 
-export function resolveUserUuid(options: Record<string, string>, config: Config): string | undefined {
-  return options.user ?? process.env.KAHUNAS_USER_UUID ?? config.userUuid;
+export function resolveUserUuid(_: Record<string, string>, config: Config): string | undefined {
+  return config.userUuid;
 }
 
 export function resolveBaseUrl(options: Record<string, string>, config: Config): string {
-  return options["base-url"] ?? config.baseUrl ?? DEFAULT_BASE_URL;
+  return config.baseUrl ?? DEFAULT_BASE_URL;
 }
 
 export function resolveWebBaseUrl(options: Record<string, string>, config: Config): string {
-  return (
-    options["web-base-url"] ??
-    process.env.KAHUNAS_WEB_BASE_URL ??
-    config.webBaseUrl ??
-    DEFAULT_WEB_BASE_URL
-  );
+  return config.webBaseUrl ?? DEFAULT_WEB_BASE_URL;
 }
