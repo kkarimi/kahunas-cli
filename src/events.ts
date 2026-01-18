@@ -501,16 +501,28 @@ function extractBodyPartsFromValue(
   return value
     .filter((entry) => entry && typeof entry === "object")
     .map((entry) => entry as Record<string, unknown>)
-    .map((entry) => ({
-      name: typeof entry.body_part_name === "string" ? entry.body_part_name : undefined,
-      volume:
+    .map((entry) => {
+      const name = typeof entry.body_part_name === "string" ? entry.body_part_name : undefined;
+      if (!name) {
+        return undefined;
+      }
+      const rawVolume =
         typeof entry.body_volume === "number"
           ? entry.body_volume
           : typeof entry.body_volume === "string"
             ? Number.parseFloat(entry.body_volume)
-            : undefined
-    }))
-    .filter((entry) => Boolean(entry.name));
+            : undefined;
+      const volume = Number.isFinite(rawVolume ?? NaN) ? rawVolume : undefined;
+      const result: { name: string; volume?: number } = { name };
+      if (volume !== undefined) {
+        result.volume = volume;
+      }
+      return result;
+    })
+    .filter(
+      (entry): entry is { name: string; volume?: number } =>
+        Boolean(entry && entry.name)
+    );
 }
 
 function extractMediaFromValue(
@@ -855,26 +867,31 @@ function buildExerciseGroups(sectionHtml: string): WorkoutExerciseGroup[] {
     end: table.end
   }));
 
-  const supersetGroups = supersetTables
-    .map((table) => {
-      const exercises = parseExercisesWithIndex(table.html).map((row) => row.exercise);
-      if (exercises.length === 0) {
-        return undefined;
-      }
-      return {
-        index: table.start,
-        group: { type: "superset", label: "Superset", exercises }
-      };
-    })
-    .filter((entry): entry is { index: number; group: WorkoutExerciseGroup } => Boolean(entry));
+  const supersetGroups: Array<{ index: number; group: WorkoutExerciseGroup }> = [];
+  for (const table of supersetTables) {
+    const exercises = parseExercisesWithIndex(table.html).map((row) => row.exercise);
+    if (exercises.length === 0) {
+      continue;
+    }
+    supersetGroups.push({
+      index: table.start,
+      group: { type: "superset", label: "Superset", exercises }
+    });
+  }
 
-  const straightGroups = parseExercisesWithIndex(sectionHtml)
-    .filter((row) => !isIndexInRanges(row.index, supersetRanges))
-    .filter((row) => !row.classValue.includes("subrow"))
-    .map((row) => ({
+  const straightGroups: Array<{ index: number; group: WorkoutExerciseGroup }> = [];
+  for (const row of parseExercisesWithIndex(sectionHtml)) {
+    if (isIndexInRanges(row.index, supersetRanges)) {
+      continue;
+    }
+    if (row.classValue.includes("subrow")) {
+      continue;
+    }
+    straightGroups.push({
       index: row.index,
       group: { type: "straight", exercises: [row.exercise] }
-    }));
+    });
+  }
 
   return [...supersetGroups, ...straightGroups]
     .sort((a, b) => a.index - b.index)
