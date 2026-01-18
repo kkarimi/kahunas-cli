@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import type { AuthConfig, Config } from "./config";
-import { AUTH_PATH, readAuthConfig, resolveCsrfToken, resolveWebBaseUrl, writeConfig } from "./config";
+import { readAuthConfig, resolveCsrfToken, resolveWebBaseUrl, validateAuthConfig, writeConfig } from "./config";
 import { fetchAuthToken } from "./http";
 import { extractToken, isLikelyAuthToken, resolveTokenExpiry } from "./tokens";
 import { debugLog, waitForEnter } from "./utils";
@@ -87,15 +87,13 @@ function normalizeToken(token: string): string {
 }
 
 function resolveStoredAuth(override?: AuthConfig): StoredAuth | undefined {
-  const auth = override ?? readAuthConfig();
+  const auth = override ? validateAuthConfig(override) : readAuthConfig();
   if (!auth) {
     return undefined;
   }
   const login = auth.username ?? auth.email;
-  if (!login || !auth.password) {
-    throw new Error(
-      `Invalid auth.json at ${AUTH_PATH}. Expected \"username\" or \"email\" and \"password\".`
-    );
+  if (!login) {
+    throw new Error("Invalid auth.json entry; missing username or email.");
   }
   return {
     login,

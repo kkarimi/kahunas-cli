@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const readConfig = vi.fn();
 const readAuthConfig = vi.fn();
@@ -52,11 +52,17 @@ vi.mock("../utils", () => ({
 const { handleWorkout } = await import("../commands/workout");
 
 const originalIsTTY = process.stdin.isTTY;
+const originalStdoutIsTTY = process.stdout.isTTY;
+let logSpy: ReturnType<typeof vi.spyOn>;
+let errorSpy: ReturnType<typeof vi.spyOn>;
 
 describe("workout sync flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     readConfig.mockReturnValue({});
     readAuthConfig.mockReturnValue(undefined);
     resolveToken.mockReturnValue(undefined);
@@ -65,8 +71,14 @@ describe("workout sync flow", () => {
     writeWorkoutCache.mockReturnValue({ updatedAt: "2026-01-01T00:00:00.000Z", plans: [] });
   });
 
+  afterEach(() => {
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
   afterAll(() => {
     Object.defineProperty(process.stdin, "isTTY", { value: originalIsTTY, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: originalStdoutIsTTY, configurable: true });
   });
 
   it("prompts for credentials and writes auth after successful capture", async () => {
@@ -80,6 +92,16 @@ describe("workout sync flow", () => {
 
     await handleWorkout(["sync"], {});
 
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual({
+      message: "Workout programs synced",
+      cache: {
+        updated_at: "2026-01-01T00:00:00.000Z",
+        count: 0,
+        path: "/tmp/kahunas/workouts.json"
+      }
+    });
+    expect(errorSpy).toHaveBeenCalledWith("Saved credentials to /tmp/kahunas/auth.json");
     expect(captureWorkoutsFromBrowser).toHaveBeenCalledTimes(1);
     expect(captureWorkoutsFromBrowser.mock.calls[0][2]).toEqual({
       email: "user@example.com",
@@ -107,6 +129,29 @@ describe("workout sync flow", () => {
 
     await handleWorkout(["sync"], {});
 
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual({
+      message: "Workout programs synced",
+      cache: {
+        updated_at: "2026-01-01T00:00:00.000Z",
+        count: 0,
+        path: "/tmp/kahunas/workouts.json"
+      }
+    });
     expect(writeAuthConfig).not.toHaveBeenCalled();
+  });
+
+  it("does not log credentials when --raw is set", async () => {
+    askQuestion.mockResolvedValueOnce("user@example.com").mockResolvedValueOnce("n");
+    askHiddenQuestion.mockResolvedValueOnce("secret");
+    captureWorkoutsFromBrowser.mockResolvedValue({
+      plans: [],
+      token: "header.payload.signature",
+      webBaseUrl: "https://kahunas.io"
+    });
+
+    await handleWorkout(["sync"], { raw: "true" });
+
+    expect(errorSpy).not.toHaveBeenCalledWith("Saved credentials to /tmp/kahunas/auth.json");
   });
 });

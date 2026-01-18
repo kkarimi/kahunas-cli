@@ -749,10 +749,13 @@ export async function handleWorkout(
         2
       )
     );
+    const shouldLogCredentialStatus = process.stdout.isTTY && !rawOutput;
     if (pendingAuth && captured.token) {
       writeAuthConfig(pendingAuth);
-      console.error(`Saved credentials to ${AUTH_PATH}`);
-    } else if (pendingAuth) {
+      if (shouldLogCredentialStatus) {
+        console.error(`Saved credentials to ${AUTH_PATH}`);
+      }
+    } else if (pendingAuth && shouldLogCredentialStatus) {
       console.error("Login was not detected; credentials were not saved.");
     }
     if (process.stdin.isTTY) {

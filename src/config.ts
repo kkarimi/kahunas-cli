@@ -36,6 +36,10 @@ export type AuthConfig = {
   loginPath?: string;
 };
 
+export type ValidAuthConfig = AuthConfig & {
+  password: string;
+} & ({ username: string } | { email: string });
+
 export type WorkoutCache = {
   updatedAt: string;
   plans: WorkoutPlan[];
@@ -54,23 +58,45 @@ export function readConfig(): Config {
   }
 }
 
-export function readAuthConfig(): AuthConfig | undefined {
+export function readAuthConfig(): ValidAuthConfig | undefined {
   if (!fs.existsSync(AUTH_PATH)) {
     return undefined;
   }
 
   const raw = fs.readFileSync(AUTH_PATH, "utf-8");
+  let parsed: AuthConfig;
   try {
-    return JSON.parse(raw) as AuthConfig;
+    parsed = JSON.parse(raw) as AuthConfig;
   } catch {
     throw new Error(`Invalid JSON in ${AUTH_PATH}.`);
   }
+  return validateAuthConfig(parsed);
 }
 
 export function writeAuthConfig(auth: AuthConfig): void {
   const dir = path.dirname(AUTH_PATH);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(AUTH_PATH, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
+}
+
+export function validateAuthConfig(auth: AuthConfig): ValidAuthConfig {
+  const missing: string[] = [];
+  const hasUsername = typeof auth.username === "string" && auth.username.trim().length > 0;
+  const hasEmail = typeof auth.email === "string" && auth.email.trim().length > 0;
+  const hasPassword = typeof auth.password === "string" && auth.password.trim().length > 0;
+
+  if (!hasUsername && !hasEmail) {
+    missing.push("username or email");
+  }
+  if (!hasPassword) {
+    missing.push("password");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Invalid auth.json at ${AUTH_PATH}. Missing ${missing.join(" and ")}.`);
+  }
+
+  return auth as ValidAuthConfig;
 }
 
 export function writeConfig(config: Config): void {
