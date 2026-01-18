@@ -13,7 +13,7 @@ pnpm install
 pnpm build
 ```
 
-2) Fetch data (browser login opens automatically on first run):
+2) Fetch data (browser login runs automatically on first run, headless by default):
 
 ```bash
 pnpm kahunas checkins list
@@ -64,12 +64,30 @@ Or:
 pnpm kahunas workout sync
 ```
 
-This opens a browser, you log in, then navigate to your workouts page. After you press Enter, the CLI captures the workout list from network responses and writes a cache:
+This runs a browser session (headless by default). You log in, then navigate to your workouts page. After you press Enter, the CLI captures the workout list from network responses and writes a cache:
 
 - `~/.config/kahunas/workouts.json`
 
 `workout list`, `workout pick`, and `workout latest` automatically merge the API list with this cache.
 Raw output (`--raw`) prints the API response only.
+
+If you add `~/.config/kahunas/auth.json`, the browser flow will attempt an automatic login and open your workouts page before capturing. Example:
+
+```json
+{
+  "email": "you@example.com",
+  "password": "your-password"
+}
+```
+
+Keep this file private; it contains credentials.
+
+Optional fields:
+
+- `username` (use instead of `email`)
+- `loginPath` (default: `/dashboard`)
+
+If auto-capture does not find workouts, the CLI falls back to the manual prompt.
 
 ### Workout events (dates)
 
@@ -104,7 +122,7 @@ Use `?day=<index>` to switch the selected workout day tab in the browser.
 
 ## Auto-login
 
-Most commands auto-login if a token is missing or expired. This opens a browser and saves session details in `~/.config/kahunas/config.json`.
+Most commands auto-login if a token is missing or expired. This runs a browser session and saves session details in `~/.config/kahunas/config.json` (headless by default). If `~/.config/kahunas/auth.json` is present, the login step is automated.
 
 ## Flags
 

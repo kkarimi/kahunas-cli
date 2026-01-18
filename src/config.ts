@@ -7,6 +7,7 @@ const DEFAULT_BASE_URL = "https://api.kahunas.io";
 const DEFAULT_WEB_BASE_URL = "https://kahunas.io";
 
 export const CONFIG_PATH = path.join(os.homedir(), ".config", "kahunas", "config.json");
+export const AUTH_PATH = path.join(os.homedir(), ".config", "kahunas", "auth.json");
 export const WORKOUT_CACHE_PATH = path.join(
   os.homedir(),
   ".config",
@@ -26,6 +27,13 @@ export type Config = {
   tokenExpiresAt?: string | null;
 };
 
+export type AuthConfig = {
+  username?: string;
+  email?: string;
+  password?: string;
+  loginPath?: string;
+};
+
 export type WorkoutCache = {
   updatedAt: string;
   plans: WorkoutPlan[];
@@ -41,6 +49,19 @@ export function readConfig(): Config {
     return JSON.parse(raw) as Config;
   } catch {
     throw new Error(`Invalid JSON in ${CONFIG_PATH}.`);
+  }
+}
+
+export function readAuthConfig(): AuthConfig | undefined {
+  if (!fs.existsSync(AUTH_PATH)) {
+    return undefined;
+  }
+
+  const raw = fs.readFileSync(AUTH_PATH, "utf-8");
+  try {
+    return JSON.parse(raw) as AuthConfig;
+  } catch {
+    throw new Error(`Invalid JSON in ${AUTH_PATH}.`);
   }
 }
 
