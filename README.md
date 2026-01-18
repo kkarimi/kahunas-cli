@@ -128,6 +128,10 @@ Most commands auto-login if a token is missing or expired. This runs a browser s
 
 Set `debug` to `true` in `~/.config/kahunas/config.json` to enable extra logs on stderr (includes workout preview debug output).
 
+## Headless mode
+
+Set `headless` to `false` in `~/.config/kahunas/config.json` to show the Playwright browser. Defaults to `true`.
+
 ## Flags
 
 - `--raw` prints raw API responses (no formatting).
