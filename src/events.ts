@@ -38,6 +38,43 @@ export type WorkoutExerciseSummary = {
   media?: { file_url?: string; thumbnail_url?: string; file_type?: number }[];
 };
 
+export function summarizeWorkoutProgramDays(program: unknown): WorkoutDaySummary[] {
+  const candidates = extractProgramDayCandidates(program);
+  if (candidates.length === 0) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const unique: WorkoutDaySummary[] = [];
+  for (const candidate of candidates) {
+    const key = [
+      candidate.day_index ?? "none",
+      candidate.day_label ?? "unknown",
+      candidate.sections.length
+    ].join("|");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(candidate);
+  }
+  return unique.sort((a, b) => {
+    const aIndex = a.day_index;
+    const bIndex = b.day_index;
+    if (aIndex !== undefined && bIndex !== undefined) {
+      return aIndex - bIndex;
+    }
+    if (aIndex !== undefined) {
+      return -1;
+    }
+    if (bIndex !== undefined) {
+      return 1;
+    }
+    const aLabel = a.day_label ?? "";
+    const bLabel = b.day_label ?? "";
+    return aLabel.localeCompare(bLabel);
+  });
+}
+
 export function filterWorkoutEvents(
   payload: unknown,
   programFilter?: string,

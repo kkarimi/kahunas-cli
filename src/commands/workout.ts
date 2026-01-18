@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { isFlagEnabled, shouldAutoLogin } from "../args";
 import {
   readConfig,
@@ -19,7 +20,9 @@ import {
   enrichWorkoutEvents,
   findWorkoutPreviewHtmlMatch,
   resolveWorkoutEventDayIndex,
-  sortWorkoutEvents
+  sortWorkoutEvents,
+  summarizeWorkoutProgramDays,
+  type WorkoutEvent
 } from "../events";
 import { fetchWorkoutProgram, getWithAuth, parseJsonText, postJson } from "../http";
 import { printResponse } from "../output";
@@ -35,6 +38,7 @@ import {
   type WorkoutPlan
 } from "../workouts";
 import { captureWorkoutsFromBrowser, loginAndPersist } from "../auth";
+import { renderWorkoutPage } from "../server/workout-view";
 import { printUsage } from "../usage";
 
 export async function handleWorkout(
@@ -59,6 +63,20 @@ export async function handleWorkout(
       }
     }
     return token;
+  };
+  let webLoginInFlight: Promise<void> | null = null;
+  const ensureWebLogin = async (): Promise<void> => {
+    if (!autoLogin) {
+      return;
+    }
+    if (!webLoginInFlight) {
+      webLoginInFlight = loginAndPersist(options, config, "silent")
+        .then(() => undefined)
+        .finally(() => {
+          webLoginInFlight = null;
+        });
+    }
+    await webLoginInFlight;
   };
 
   const baseUrl = resolveBaseUrl(options, config);
@@ -92,6 +110,266 @@ export async function handleWorkout(
     const merged = cache ? mergeWorkoutPlans(plans, cache.plans) : plans;
 
     return { response, plans: merged, cache };
+  };
+
+  const fetchWorkoutEventsPayload = async (): Promise<{
+    text: string;
+    payload: unknown;
+    timezone: string;
+  }> => {
+    const baseWebUrl = resolveWebBaseUrl(options, config);
+    const webOrigin = new URL(baseWebUrl).origin;
+    const timezone =
+      options.timezone ??
+      process.env.TZ ??
+      Intl.DateTimeFormat().resolvedOptions().timeZone ??
+      "Europe/London";
+    let userUuid = resolveUserUuid(options, config);
+    if (!userUuid) {
+      try {
+        await ensureToken();
+        let checkinsResponse = await postJson("/api/v2/checkin/list", token!, baseUrl, {
+          page: 1,
+          rpp: 1
+        });
+        if (autoLogin && isTokenExpiredResponse(checkinsResponse.json)) {
+          token = await loginAndPersist(options, config, "silent");
+          checkinsResponse = await postJson("/api/v2/checkin/list", token, baseUrl, {
+            page: 1,
+            rpp: 1
+          });
+        }
+        if (checkinsResponse.ok) {
+          const extracted = extractUserUuidFromCheckins(checkinsResponse.json);
+          if (extracted) {
+            userUuid = extracted;
+            if (userUuid !== config.userUuid) {
+              writeConfig({ ...config, userUuid });
+            }
+          }
+        }
+      } catch {
+        // Best-effort discovery only.
+      }
+    }
+    if (!userUuid) {
+      throw new Error("Missing user uuid. Use --user or run 'kahunas checkins list' once.");
+    }
+    if (userUuid !== config.userUuid) {
+      writeConfig({ ...config, userUuid });
+    }
+
+    let csrfToken = resolveCsrfToken(options, config);
+    let csrfCookie = resolveCsrfCookie(options, config);
+    let authCookie = resolveAuthCookie(options, config);
+    let effectiveCsrfToken = csrfCookie ?? csrfToken;
+    let cookieHeader =
+      authCookie ??
+      (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
+
+    if ((!csrfToken || !cookieHeader || !authCookie) && autoLogin) {
+      await ensureWebLogin();
+      const refreshed = readConfig();
+      csrfToken = resolveCsrfToken(options, refreshed);
+      csrfCookie = resolveCsrfCookie(options, refreshed);
+      authCookie = resolveAuthCookie(options, refreshed);
+      effectiveCsrfToken = csrfCookie ?? csrfToken;
+      cookieHeader =
+        authCookie ??
+        (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
+    }
+
+    if (!effectiveCsrfToken) {
+      throw new Error("Missing CSRF token. Run 'kahunas auth login' and try again.");
+    }
+    if (!cookieHeader) {
+      throw new Error("Missing cookies. Run 'kahunas auth login' and try again.");
+    }
+
+    const url = new URL(`/coach/clients/calendar/getEvent/${userUuid}`, webOrigin);
+    url.searchParams.set("timezone", timezone);
+
+    const body = new URLSearchParams();
+    body.set("csrf_kahunas_token", effectiveCsrfToken);
+    body.set("filter", options.filter ?? "");
+
+    let response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        accept: "*/*",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        cookie: cookieHeader,
+        origin: webOrigin,
+        referer: `${webOrigin}/dashboard`,
+        "x-requested-with": "XMLHttpRequest"
+      },
+      body: body.toString()
+    });
+
+    let text = await response.text();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+    if (autoLogin && isLikelyLoginHtml(text)) {
+      await ensureWebLogin();
+      const refreshed = readConfig();
+      csrfToken = resolveCsrfToken(options, refreshed);
+      csrfCookie = resolveCsrfCookie(options, refreshed);
+      authCookie = resolveAuthCookie(options, refreshed);
+      effectiveCsrfToken = csrfCookie ?? csrfToken;
+      cookieHeader =
+        authCookie ??
+        (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
+      if (!effectiveCsrfToken || !cookieHeader) {
+        throw new Error("Login required. Run 'kahunas auth login' and try again.");
+      }
+      const retry = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          accept: "*/*",
+          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+          cookie: cookieHeader,
+          origin: webOrigin,
+          referer: `${webOrigin}/dashboard`,
+          "x-requested-with": "XMLHttpRequest"
+        },
+        body: body.toString()
+      });
+      text = await retry.text();
+      if (!retry.ok) {
+        throw new Error(`HTTP ${retry.status}: ${text}`);
+      }
+    }
+
+    const payload = parseJsonText(text);
+    return { text, payload, timezone };
+  };
+
+  const buildProgramDetails = async (
+    events: WorkoutEvent[]
+  ): Promise<Record<string, unknown>> => {
+    let programIndex: Record<string, WorkoutPlan> | undefined;
+    const cache = readWorkoutCache();
+    let plans = cache?.plans ?? [];
+    try {
+      await ensureToken();
+      const listUrl = new URL("/api/v1/workoutprogram", baseUrl);
+      listUrl.searchParams.set("page", "1");
+      listUrl.searchParams.set("rpp", "100");
+      let listResponse = await getWithAuth(listUrl.pathname + listUrl.search, token!, baseUrl);
+      if (autoLogin && isTokenExpiredResponse(listResponse.json)) {
+        token = await loginAndPersist(options, config, "silent");
+        listResponse = await getWithAuth(listUrl.pathname + listUrl.search, token, baseUrl);
+      }
+      if (listResponse.ok) {
+        const fromApi = extractWorkoutPlans(listResponse.json);
+        plans = mergeWorkoutPlans(fromApi, plans);
+      }
+    } catch {
+      // Best-effort enrichment only.
+    }
+    if (plans.length > 0) {
+      programIndex = buildWorkoutPlanIndex(plans);
+    }
+
+    const refreshed = readConfig();
+    const csrfToken = resolveCsrfToken(options, refreshed);
+    const csrfCookie = resolveCsrfCookie(options, refreshed);
+    const effectiveCsrfToken = csrfCookie ?? csrfToken;
+
+    const programDetails: Record<string, unknown> = {};
+    const programIds = Array.from(
+      new Set(
+        events
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return undefined;
+            }
+            const record = entry as Record<string, unknown>;
+            return typeof record.program === "string" ? record.program : undefined;
+          })
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    for (const programId of programIds) {
+      try {
+        await ensureToken();
+        let responseProgram = await fetchWorkoutProgram(
+          token!,
+          baseUrl,
+          programId,
+          effectiveCsrfToken
+        );
+        if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
+          token = await loginAndPersist(options, config, "silent");
+          responseProgram = await fetchWorkoutProgram(
+            token,
+            baseUrl,
+            programId,
+            effectiveCsrfToken
+          );
+        }
+        if (responseProgram.ok && responseProgram.json && typeof responseProgram.json === "object") {
+          const programPayload = responseProgram.json as Record<string, unknown>;
+          const data = programPayload.data;
+          if (data && typeof data === "object") {
+            const plan = (data as Record<string, unknown>).workout_plan;
+            if (plan) {
+              programDetails[programId] = plan;
+              continue;
+            }
+          }
+          programDetails[programId] = programPayload;
+          continue;
+        }
+      } catch {
+        // Ignore fetch failures and fall back to cached index.
+      }
+      programDetails[programId] = programIndex?.[programId] ?? null;
+    }
+
+    return programDetails;
+  };
+
+  const resolveSelectedDayIndex = (
+    days: ReturnType<typeof summarizeWorkoutProgramDays>,
+    eventDayIndex: number | undefined,
+    eventDayLabel: string | undefined,
+    dayParam: string | null
+  ): number | undefined => {
+    const parseOptionalInt = (value: string | null): number | undefined => {
+      if (!value) {
+        return undefined;
+      }
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const normalize = (value: string): string => value.trim().toLowerCase();
+
+    const paramIndex = parseOptionalInt(dayParam);
+    if (paramIndex !== undefined && days[paramIndex]) {
+      return paramIndex;
+    }
+    if (eventDayIndex !== undefined) {
+      const matchIndex = days.findIndex((day) => day.day_index === eventDayIndex);
+      if (matchIndex >= 0) {
+        return matchIndex;
+      }
+    }
+    if (eventDayLabel) {
+      const normalized = normalize(eventDayLabel);
+      const matchIndex = days.findIndex((day) =>
+        day.day_label ? normalize(day.day_label).includes(normalized) : false
+      );
+      if (matchIndex >= 0) {
+        return matchIndex;
+      }
+    }
+    if (days.length > 0) {
+      return 0;
+    }
+    return undefined;
   };
 
   if (action === "list") {
@@ -194,142 +472,17 @@ export async function handleWorkout(
   }
 
   if (action === "events") {
-    const baseWebUrl = resolveWebBaseUrl(options, config);
-    const webOrigin = new URL(baseWebUrl).origin;
-    const timezone =
-      options.timezone ??
-      process.env.TZ ??
-      Intl.DateTimeFormat().resolvedOptions().timeZone ??
-      "Europe/London";
-    let userUuid = resolveUserUuid(options, config);
-    if (!userUuid) {
-      try {
-        await ensureToken();
-        let checkinsResponse = await postJson("/api/v2/checkin/list", token!, baseUrl, {
-          page: 1,
-          rpp: 1
-        });
-        if (autoLogin && isTokenExpiredResponse(checkinsResponse.json)) {
-          token = await loginAndPersist(options, config, "silent");
-          checkinsResponse = await postJson("/api/v2/checkin/list", token, baseUrl, {
-            page: 1,
-            rpp: 1
-          });
-        }
-        if (checkinsResponse.ok) {
-          const extracted = extractUserUuidFromCheckins(checkinsResponse.json);
-          if (extracted) {
-            userUuid = extracted;
-            if (userUuid !== config.userUuid) {
-              writeConfig({ ...config, userUuid });
-            }
-          }
-        }
-      } catch {
-        // Best-effort discovery only.
-      }
-    }
-    if (!userUuid) {
-      throw new Error("Missing user uuid. Use --user or run 'kahunas checkins list' once.");
-    }
-    if (userUuid !== config.userUuid) {
-      writeConfig({ ...config, userUuid });
-    }
-
     const minimal = isFlagEnabled(options, "minimal");
     const full = isFlagEnabled(options, "full");
     const debugPreview = isFlagEnabled(options, "debug-preview");
     const latest = isFlagEnabled(options, "latest") || isFlagEnabled(options, "last");
     const limit = latest ? 1 : parseNumber(options.limit, 0);
 
-    let csrfToken = resolveCsrfToken(options, config);
-    let csrfCookie = resolveCsrfCookie(options, config);
-    let authCookie = resolveAuthCookie(options, config);
-    let effectiveCsrfToken = csrfCookie ?? csrfToken;
-    let cookieHeader =
-      authCookie ??
-      (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
-
-    if ((!csrfToken || !cookieHeader || !authCookie) && autoLogin) {
-      await loginAndPersist(options, config, "silent");
-      const refreshed = readConfig();
-      csrfToken = resolveCsrfToken(options, refreshed);
-      csrfCookie = resolveCsrfCookie(options, refreshed);
-      authCookie = resolveAuthCookie(options, refreshed);
-      effectiveCsrfToken = csrfCookie ?? csrfToken;
-      cookieHeader =
-        authCookie ??
-        (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
-    }
-
-    if (!effectiveCsrfToken) {
-      throw new Error("Missing CSRF token. Run 'kahunas auth login' and try again.");
-    }
-    if (!cookieHeader) {
-      throw new Error("Missing cookies. Run 'kahunas auth login' and try again.");
-    }
-
-    const url = new URL(`/coach/clients/calendar/getEvent/${userUuid}`, webOrigin);
-    url.searchParams.set("timezone", timezone);
-
-    const body = new URLSearchParams();
-    body.set("csrf_kahunas_token", effectiveCsrfToken);
-    body.set("filter", options.filter ?? "");
-
-    let response = await fetch(url.toString(), {
-      method: "POST",
-      headers: {
-        accept: "*/*",
-        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-        cookie: cookieHeader,
-        origin: webOrigin,
-        referer: `${webOrigin}/dashboard`,
-        "x-requested-with": "XMLHttpRequest"
-      },
-      body: body.toString()
-    });
-
-    let text = await response.text();
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${text}`);
-    }
-    if (autoLogin && isLikelyLoginHtml(text)) {
-      await loginAndPersist(options, config, "silent");
-      const refreshed = readConfig();
-      csrfToken = resolveCsrfToken(options, refreshed);
-      csrfCookie = resolveCsrfCookie(options, refreshed);
-      authCookie = resolveAuthCookie(options, refreshed);
-      effectiveCsrfToken = csrfCookie ?? csrfToken;
-      cookieHeader =
-        authCookie ??
-        (effectiveCsrfToken ? `csrf_kahunas_cookie_token=${effectiveCsrfToken}` : undefined);
-      if (!effectiveCsrfToken || !cookieHeader) {
-        throw new Error("Login required. Run 'kahunas auth login' and try again.");
-      }
-      const retry = await fetch(url.toString(), {
-        method: "POST",
-        headers: {
-          accept: "*/*",
-          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-          cookie: cookieHeader,
-          origin: webOrigin,
-          referer: `${webOrigin}/dashboard`,
-          "x-requested-with": "XMLHttpRequest"
-        },
-        body: body.toString()
-      });
-      text = await retry.text();
-      if (!retry.ok) {
-        throw new Error(`HTTP ${retry.status}: ${text}`);
-      }
-    }
-
+    const { text, payload, timezone } = await fetchWorkoutEventsPayload();
     if (rawOutput) {
       console.log(text);
       return;
     }
-
-    const payload = parseJsonText(text);
     if (!Array.isArray(payload)) {
       console.log(text);
       return;
@@ -344,81 +497,7 @@ export async function handleWorkout(
       return;
     }
 
-    let programIndex: Record<string, WorkoutPlan> | undefined;
-    const cache = readWorkoutCache();
-    let plans = cache?.plans ?? [];
-    try {
-      await ensureToken();
-      const listUrl = new URL("/api/v1/workoutprogram", baseUrl);
-      listUrl.searchParams.set("page", "1");
-      listUrl.searchParams.set("rpp", "100");
-      let listResponse = await getWithAuth(listUrl.pathname + listUrl.search, token!, baseUrl);
-      if (autoLogin && isTokenExpiredResponse(listResponse.json)) {
-        token = await loginAndPersist(options, config, "silent");
-        listResponse = await getWithAuth(listUrl.pathname + listUrl.search, token, baseUrl);
-      }
-      if (listResponse.ok) {
-        const fromApi = extractWorkoutPlans(listResponse.json);
-        plans = mergeWorkoutPlans(fromApi, plans);
-      }
-    } catch {
-      // Best-effort enrichment only.
-    }
-    if (plans.length > 0) {
-      programIndex = buildWorkoutPlanIndex(plans);
-    }
-
-    const programDetails: Record<string, unknown> = {};
-    const programIds = Array.from(
-      new Set(
-        sorted
-          .map((entry) => {
-            if (!entry || typeof entry !== "object") {
-              return undefined;
-            }
-            const record = entry as Record<string, unknown>;
-            return typeof record.program === "string" ? record.program : undefined;
-          })
-          .filter((value): value is string => Boolean(value))
-      )
-    );
-
-    for (const programId of programIds) {
-      try {
-        await ensureToken();
-        let responseProgram = await fetchWorkoutProgram(
-          token!,
-          baseUrl,
-          programId,
-          effectiveCsrfToken
-        );
-        if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
-          token = await loginAndPersist(options, config, "silent");
-          responseProgram = await fetchWorkoutProgram(
-            token,
-            baseUrl,
-            programId,
-            effectiveCsrfToken
-          );
-        }
-        if (responseProgram.ok && responseProgram.json && typeof responseProgram.json === "object") {
-          const programPayload = responseProgram.json as Record<string, unknown>;
-          const data = programPayload.data;
-          if (data && typeof data === "object") {
-            const plan = (data as Record<string, unknown>).workout_plan;
-            if (plan) {
-              programDetails[programId] = plan;
-              continue;
-            }
-          }
-          programDetails[programId] = programPayload;
-          continue;
-        }
-      } catch {
-        // Ignore fetch failures and fall back to cached index.
-      }
-      programDetails[programId] = programIndex?.[programId] ?? null;
-    }
+    const programDetails = await buildProgramDetails(sorted);
 
     if (debugPreview) {
       for (const entry of limited) {
@@ -452,6 +531,127 @@ export async function handleWorkout(
       workout: options.workout
     });
     console.log(JSON.stringify(formatted, null, 2));
+    return;
+  }
+
+  if (action === "serve") {
+    const host = options.host ?? "127.0.0.1";
+    const port = parseNumber(options.port, 3000);
+    const limit = parseNumber(options.limit, 1);
+    const cacheTtlMs = parseNumber(options["cache-ttl"], 30_000);
+
+    const loadSummary = async (): Promise<{
+      formatted: ReturnType<typeof formatWorkoutEventsOutput>;
+      days: ReturnType<typeof summarizeWorkoutProgramDays>;
+      summary?: ReturnType<typeof formatWorkoutEventsOutput>["events"][number];
+      timezone: string;
+    }> => {
+      const { text, payload, timezone } = await fetchWorkoutEventsPayload();
+      if (!Array.isArray(payload)) {
+        throw new Error(`Unexpected calendar response: ${text.slice(0, 200)}`);
+      }
+      const filtered = filterWorkoutEvents(payload, options.program, options.workout);
+      const sorted = sortWorkoutEvents(filtered);
+      const bounded = limit > 0 ? sorted.slice(-limit) : sorted;
+      const programDetails = await buildProgramDetails(sorted);
+      const formatted = formatWorkoutEventsOutput(bounded, programDetails, {
+        timezone,
+        program: options.program,
+        workout: options.workout
+      });
+      const summary = formatted.events[0];
+      const programUuid =
+        summary?.program?.uuid ??
+        (bounded[0] && typeof bounded[0] === "object"
+          ? ((bounded[0] as Record<string, unknown>).program as string | undefined)
+          : undefined);
+      const program = programUuid ? programDetails[programUuid] : undefined;
+      const days = summarizeWorkoutProgramDays(program);
+      return { formatted, days, summary, timezone };
+    };
+
+    let cached:
+      | {
+          data: Awaited<ReturnType<typeof loadSummary>>;
+          fetchedAt: number;
+        }
+      | undefined;
+    let summaryInFlight: Promise<Awaited<ReturnType<typeof loadSummary>>> | null = null;
+
+    const getSummary = async (forceRefresh: boolean): Promise<Awaited<ReturnType<typeof loadSummary>>> => {
+      if (!forceRefresh && cached && Date.now() - cached.fetchedAt < cacheTtlMs) {
+        return cached.data;
+      }
+      if (!forceRefresh && summaryInFlight) {
+        return summaryInFlight;
+      }
+      const pending = loadSummary().finally(() => {
+        summaryInFlight = null;
+      });
+      summaryInFlight = pending;
+      const data = await pending;
+      cached = { data, fetchedAt: Date.now() };
+      return data;
+    };
+
+    const server = createServer(async (req, res) => {
+      try {
+        const url = new URL(req.url ?? "/", `http://${host}:${port}`);
+        const wantsRefresh = url.searchParams.get("refresh") === "1";
+
+        if (url.pathname === "/api/workout") {
+          const data = await getSummary(wantsRefresh);
+          res.statusCode = 200;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.setHeader("cache-control", "no-store");
+          res.end(JSON.stringify(data.formatted, null, 2));
+          return;
+        }
+
+        if (url.pathname === "/favicon.ico") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
+        if (url.pathname !== "/") {
+          res.statusCode = 404;
+          res.end("Not found");
+          return;
+        }
+
+        const data = await getSummary(wantsRefresh);
+        const dayParam = url.searchParams.get("day");
+        const selectedDayIndex = resolveSelectedDayIndex(
+          data.days,
+          data.summary?.workout_day?.day_index,
+          data.summary?.workout_day?.day_label,
+          dayParam
+        );
+        const html = renderWorkoutPage({
+          summary: data.summary,
+          days: data.days,
+          selectedDayIndex,
+          timezone: data.timezone,
+          apiPath: "/api/workout",
+          refreshPath: "/?refresh=1",
+          isLatest: limit === 1
+        });
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/html; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(html);
+      } catch (error) {
+        res.statusCode = 500;
+        res.setHeader("content-type", "text/plain; charset=utf-8");
+        res.end(error instanceof Error ? error.message : "Server error");
+      }
+    });
+
+    server.listen(port, host, () => {
+      console.log(`Local workout server running at http://${host}:${port}`);
+      console.log(`JSON endpoint at http://${host}:${port}/api/workout`);
+    });
     return;
   }
 

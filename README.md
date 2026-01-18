@@ -64,6 +64,8 @@ Tokens are saved to:
   - Loads the most recently updated program.
 - `kahunas workout events`
   - Lists workout log events with dates and a human-friendly workout summary (from the calendar endpoint).
+- `kahunas workout serve`
+  - Starts a local dev server with a workout preview page and a JSON endpoint that matches the CLI output.
 - `kahunas workout program <id>`
   - Fetches a program by UUID.
 
@@ -111,6 +113,27 @@ If the user UUID is missing, `workout events` will attempt to discover it from c
 
 - `KAHUNAS_USER_UUID=...`
 - `--user <uuid>`
+
+### Workout preview server
+
+Run a local dev server to preview workouts in a browser:
+
+```bash
+pnpm kahunas -- workout serve
+```
+
+The HTML page is available at `http://127.0.0.1:3000` and the JSON endpoint is at `http://127.0.0.1:3000/api/workout`.
+The JSON response matches the CLI output for `workout events --latest`, so there is only one data shape to maintain.
+
+Options:
+
+```bash
+pnpm kahunas -- workout serve --program <program-uuid>
+pnpm kahunas -- workout serve --workout <workout-uuid>
+pnpm kahunas -- workout serve --limit 3
+```
+
+Use `?day=<index>` to switch the selected workout day tab in the browser.
 
 ## Auto-login
 
