@@ -44,6 +44,8 @@ Workout sync uses a headless browser session (by default) to capture workout pro
 
 If auto-capture does not find workouts, the CLI falls back to a manual prompt where you log in and navigate to the workouts screen before pressing Enter.
 
+If there is no valid session token and no `auth.json`, `sync` prompts for credentials, saves them to `~/.config/kahunas/auth.json`, and continues. After syncing, it asks whether to start the preview server.
+
 ## Auth automation
 
 If you add `~/.config/kahunas/auth.json`, the browser flow will attempt an automatic login. Example:

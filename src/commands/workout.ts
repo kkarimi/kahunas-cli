@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { isFlagEnabled } from "../args";
 import {
   readConfig,
+  readAuthConfig,
   readWorkoutCache,
   resolveAuthCookie,
   resolveBaseUrl,
@@ -11,7 +12,9 @@ import {
   resolveUserUuid,
   resolveWebBaseUrl,
   writeConfig,
+  writeAuthConfig,
   writeWorkoutCache,
+  AUTH_PATH,
   CONFIG_PATH,
   WORKOUT_CACHE_PATH
 } from "../config";
@@ -671,6 +674,38 @@ export async function handleWorkout(
   }
 
   if (action === "sync") {
+    const authConfig = readAuthConfig();
+    const hasAuthConfig =
+      !!authConfig &&
+      !!authConfig.password &&
+      (!!authConfig.email || !!authConfig.username);
+    const tokenUpdatedAt = config.tokenUpdatedAt ?? undefined;
+    const tokenExpiry = token && tokenUpdatedAt ? resolveTokenExpiry(token, tokenUpdatedAt) : null;
+    const hasValidToken = !!tokenExpiry && Date.now() < Date.parse(tokenExpiry);
+
+    if (!hasValidToken && !hasAuthConfig) {
+      if (!process.stdin.isTTY) {
+        throw new Error(
+          "Missing auth credentials. Create ~/.config/kahunas/auth.json or run 'kahunas sync' in a terminal."
+        );
+      }
+      const login = await askQuestion("Email or username: ", process.stderr);
+      if (!login) {
+        throw new Error("Missing email/username for login.");
+      }
+      const password = await askQuestion("Password: ", process.stderr);
+      if (!password) {
+        throw new Error("Missing password for login.");
+      }
+      const isEmail = login.includes("@");
+      writeAuthConfig({
+        email: isEmail ? login : undefined,
+        username: isEmail ? undefined : login,
+        password
+      });
+      console.error(`Saved credentials to ${AUTH_PATH}`);
+    }
+
     const captured = await captureWorkoutsFromBrowser(options, config);
     const nextConfig = { ...config };
     if (captured.token) {
@@ -707,6 +742,12 @@ export async function handleWorkout(
         2
       )
     );
+    if (process.stdin.isTTY) {
+      const answer = await askQuestion("Start the preview server now? (y/N): ", process.stderr);
+      if (answer.toLowerCase().startsWith("y")) {
+        await handleWorkout(["serve"], options);
+      }
+    }
     return;
   }
 

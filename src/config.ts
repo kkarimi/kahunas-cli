@@ -67,6 +67,12 @@ export function readAuthConfig(): AuthConfig | undefined {
   }
 }
 
+export function writeAuthConfig(auth: AuthConfig): void {
+  const dir = path.dirname(AUTH_PATH);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(AUTH_PATH, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
+}
+
 export function writeConfig(config: Config): void {
   const dir = path.dirname(CONFIG_PATH);
   fs.mkdirSync(dir, { recursive: true });

@@ -29,6 +29,8 @@ pnpm kahunas serve
 
 Open `http://127.0.0.1:3000`.
 
+If `auth.json` is missing, `sync` will prompt for credentials and save them.
+
 ## Advanced usage
 
 See `docs/advanced.md` for all commands, flags, and configuration options.
