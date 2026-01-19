@@ -46,6 +46,7 @@ import {
 import { captureWorkoutsFromBrowser, loginAndPersist } from "../auth";
 import { renderWorkoutPage } from "../server/workout-view";
 import { printUsage } from "../usage";
+import { formatHumanTimestamp, isIsoAfterNow } from "../datetime";
 
 export async function handleWorkout(
   positionals: string[],
@@ -459,9 +460,13 @@ export async function handleWorkout(
     server.listen(port, host, () => {
       const cache = readWorkoutCache();
       const freshConfig = readConfig();
-      const lastSync = cache?.updatedAt ?? "none";
-      const tokenExpiry = freshConfig.tokenExpiresAt ?? "unknown";
-      const tokenUpdatedAt = freshConfig.tokenUpdatedAt ?? "unknown";
+      const lastSync = cache?.updatedAt ? formatHumanTimestamp(cache.updatedAt) : "none";
+      const tokenExpiry = freshConfig.tokenExpiresAt
+        ? formatHumanTimestamp(freshConfig.tokenExpiresAt)
+        : "unknown";
+      const tokenUpdatedAt = freshConfig.tokenUpdatedAt
+        ? formatHumanTimestamp(freshConfig.tokenUpdatedAt)
+        : "unknown";
       logInfo(`Local workout server running at http://${host}:${port}`);
       logInfo(`JSON endpoint at http://${host}:${port}/api/workout`);
       logInfo(`Config: ${CONFIG_PATH}`);
@@ -688,7 +693,7 @@ export async function handleWorkout(
       (!!authConfig.email || !!authConfig.username);
     const tokenUpdatedAt = config.tokenUpdatedAt ?? undefined;
     const tokenExpiry = token && tokenUpdatedAt ? resolveTokenExpiry(token, tokenUpdatedAt) : null;
-    const hasValidToken = !!tokenExpiry && Date.now() < Date.parse(tokenExpiry);
+    const hasValidToken = !!tokenExpiry && isIsoAfterNow(tokenExpiry);
     let pendingAuth: AuthConfig | undefined;
 
     if (!hasValidToken && !hasAuthConfig) {

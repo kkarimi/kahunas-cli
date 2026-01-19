@@ -1,6 +1,18 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import {
+  check,
+  flatten,
+  minLength,
+  object,
+  optional,
+  pipe,
+  safeParse,
+  string,
+  trim,
+  type InferOutput
+} from "valibot";
 import type { WorkoutPlan } from "./workouts";
 
 const DEFAULT_BASE_URL = "https://api.kahunas.io";
@@ -36,9 +48,17 @@ export type AuthConfig = {
   loginPath?: string;
 };
 
-export type ValidAuthConfig = AuthConfig & {
-  password: string;
-} & ({ username: string } | { email: string });
+const AuthConfigSchema = pipe(
+  object({
+    username: optional(pipe(string(), trim(), minLength(1, "Missing username."))),
+    email: optional(pipe(string(), trim(), minLength(1, "Missing email."))),
+    password: pipe(string("Missing password."), trim(), minLength(1, "Missing password.")),
+    loginPath: optional(string())
+  }),
+  check((input) => Boolean(input.username || input.email), "Missing username or email.")
+);
+
+export type ValidAuthConfig = InferOutput<typeof AuthConfigSchema>;
 
 export type WorkoutCache = {
   updatedAt: string;
@@ -80,15 +100,17 @@ export function writeAuthConfig(auth: AuthConfig): void {
 }
 
 export function validateAuthConfig(auth: AuthConfig): ValidAuthConfig {
-  const missing: string[] = [];
-  const hasUsername = typeof auth.username === "string" && auth.username.trim().length > 0;
-  const hasEmail = typeof auth.email === "string" && auth.email.trim().length > 0;
-  const hasPassword = typeof auth.password === "string" && auth.password.trim().length > 0;
+  const result = safeParse(AuthConfigSchema, auth);
+  if (result.success) {
+    return result.output;
+  }
 
-  if (!hasUsername && !hasEmail) {
+  const flat = flatten(result.issues);
+  const missing: string[] = [];
+  if (flat.root?.some((message) => message.includes("username or email"))) {
     missing.push("username or email");
   }
-  if (!hasPassword) {
+  if (flat.nested?.password) {
     missing.push("password");
   }
 
@@ -96,7 +118,12 @@ export function validateAuthConfig(auth: AuthConfig): ValidAuthConfig {
     throw new Error(`Invalid auth.json at ${AUTH_PATH}. Missing ${missing.join(" and ")}.`);
   }
 
-  return auth as ValidAuthConfig;
+  const detail =
+    flat.root?.[0] ??
+    flat.other?.[0] ??
+    flat.nested?.password?.[0] ??
+    "Invalid auth.json format.";
+  throw new Error(`Invalid auth.json at ${AUTH_PATH}. ${detail}`);
 }
 
 export function writeConfig(config: Config): void {

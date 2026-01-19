@@ -30,8 +30,10 @@
   ],
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
+    "date-fns": "^4.1.0",
     "picocolors": "^1.1.1",
-    "playwright": "^1.49.1"
+    "playwright": "^1.49.1",
+    "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

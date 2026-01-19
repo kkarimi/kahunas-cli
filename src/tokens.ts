@@ -1,3 +1,5 @@
+import { addMillisecondsIso, isoFromUnixSeconds } from "./datetime";
+
 export function isLikelyAuthToken(value: string): boolean {
   if (value.length >= 80) {
     return true;
@@ -73,7 +75,7 @@ export function extractJwtExpiry(token: string): string | undefined {
     if (typeof data.exp !== "number" || !Number.isFinite(data.exp)) {
       return undefined;
     }
-    return new Date(data.exp * 1000).toISOString();
+    return isoFromUnixSeconds(data.exp);
   } catch {
     return undefined;
   }
@@ -86,11 +88,7 @@ export function resolveTokenExpiry(token: string, tokenUpdatedAt: string): strin
   if (jwtExpiry) {
     return jwtExpiry;
   }
-  const updatedAt = Date.parse(tokenUpdatedAt);
-  if (!Number.isFinite(updatedAt)) {
-    return undefined;
-  }
-  return new Date(updatedAt + DEFAULT_TOKEN_TTL_MS).toISOString();
+  return addMillisecondsIso(tokenUpdatedAt, DEFAULT_TOKEN_TTL_MS);
 }
 
 function decodeBase64Url(value: string): string | undefined {
