@@ -2,6 +2,6 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      run: pnpm lint
+      run: pnpm lint:fmt
     build:
       run: pnpm build

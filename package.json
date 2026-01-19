@@ -2,14 +2,28 @@
   "name": "kahunas-cli",
   "version": "1.7.0",
   "description": "",
-  "main": "dist/cli.js",
+  "keywords": [],
+  "license": "ISC",
+  "author": "Nima Karimi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkarimi/kahunas-cli.git"
+  },
   "bin": {
     "kahunas": "dist/cli.js"
   },
+  "files": [
+    "ai-screenshot.png",
+    "README.md",
+    "dist/cli.js"
+  ],
+  "main": "dist/cli.js",
   "scripts": {
     "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --external playwright --tsconfig tsconfig.json",
     "kahunas": "node dist/cli.js",
     "lint": "pnpm typecheck",
+    "lint:fmt": "pnpm lint:fix",
+    "lint:fix": "oxfmt .",
     "prepublishOnly": "pnpm build",
     "start": "node dist/cli.js",
     "release": "pnpm dlx tsx scripts/release.ts",
@@ -18,19 +32,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepare": "lefthook install"
   },
-  "keywords": [],
-  "author": "Nima Karimi",
-  "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kkarimi/kahunas-cli.git"
-  },
-  "files": [
-    "dist/cli.js",
-    "README.md",
-    "ai-screenshot.png"
-  ],
-  "packageManager": "pnpm@10.25.0",
   "dependencies": {
     "date-fns": "^4.1.0",
     "picocolors": "^1.1.1",
@@ -41,11 +42,13 @@
     "@types/node": "^22.10.5",
     "@vitest/coverage-v8": "^1.6.0",
     "lefthook": "^2.0.15",
+    "oxfmt": "^0.25.0",
     "rolldown": "1.0.0-beta.59",
     "typescript": "^5.7.3",
     "vitest": "^1.6.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.25.0"
 }
