@@ -19,7 +19,7 @@ export async function postJson(
   pathName: string,
   token: string,
   baseUrl: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
 ): Promise<ApiResponse> {
   const url = new URL(pathName, baseUrl).toString();
   const response = await fetch(url, {
@@ -29,9 +29,9 @@ export async function postJson(
       "content-type": "application/json",
       "auth-user-token": token,
       origin: "https://kahunas.io",
-      referer: "https://kahunas.io/"
+      referer: "https://kahunas.io/",
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   const text = await response.text();
@@ -39,14 +39,14 @@ export async function postJson(
     ok: response.ok,
     status: response.status,
     text,
-    json: parseJsonText(text)
+    json: parseJsonText(text),
   };
 }
 
 export async function getWithAuth(
   pathName: string,
   token: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<ApiResponse> {
   const url = new URL(pathName, baseUrl).toString();
   const response = await fetch(url, {
@@ -55,8 +55,8 @@ export async function getWithAuth(
       accept: "*/*",
       "auth-user-token": token,
       origin: "https://kahunas.io",
-      referer: "https://kahunas.io/"
-    }
+      referer: "https://kahunas.io/",
+    },
   });
 
   const text = await response.text();
@@ -64,7 +64,7 @@ export async function getWithAuth(
     ok: response.ok,
     status: response.status,
     text,
-    json: parseJsonText(text)
+    json: parseJsonText(text),
   };
 }
 
@@ -72,7 +72,7 @@ export async function fetchWorkoutProgram(
   token: string,
   baseUrl: string,
   programId: string,
-  csrfToken?: string
+  csrfToken?: string,
 ): Promise<ApiResponse> {
   const url = new URL(`/api/v1/workoutprogram/${programId}`, baseUrl);
   if (csrfToken) {
@@ -84,7 +84,7 @@ export async function fetchWorkoutProgram(
 export async function fetchAuthToken(
   csrfToken: string,
   cookieHeader: string,
-  webBaseUrl: string
+  webBaseUrl: string,
 ): Promise<{ token?: string; raw: string }> {
   const webOrigin = new URL(webBaseUrl).origin;
   const url = new URL("/get-token", webOrigin);
@@ -97,8 +97,8 @@ export async function fetchAuthToken(
       cookie: cookieHeader,
       origin: webOrigin,
       referer: `${webOrigin}/dashboard`,
-      "x-requested-with": "XMLHttpRequest"
-    }
+      "x-requested-with": "XMLHttpRequest",
+    },
   });
 
   const text = await response.text();

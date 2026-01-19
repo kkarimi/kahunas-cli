@@ -12,7 +12,7 @@ describe("renderWorkoutPage", () => {
         sections: [
           {
             type: "workout",
-            label: "Main \"Block\"",
+            label: 'Main "Block"',
             groups: [
               {
                 type: "superset",
@@ -22,26 +22,26 @@ describe("renderWorkoutPage", () => {
                     sets: 3,
                     reps: "10",
                     rest_seconds: 90,
-                    body_parts: [{ name: "Chest & Arms", volume: 2.5 }]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+                    body_parts: [{ name: "Chest & Arms", volume: 2.5 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       },
       {
         day_index: 2,
         day_label: "Day 2",
         total_volume_sets: [],
-        sections: []
-      }
+        sections: [],
+      },
     ];
 
     const summary: WorkoutEventSummary = {
       event: { title: "Legs & <Arms>", start: "2026-01-01 10:00:00" },
-      program: { title: "Program \"A\"" },
-      workout_day: days[0]
+      program: { title: 'Program "A"' },
+      workout_day: days[0],
     };
 
     const html = renderWorkoutPage({
@@ -51,7 +51,7 @@ describe("renderWorkoutPage", () => {
       timezone: "Europe/London",
       apiPath: "/api/workout",
       refreshPath: "/?refresh=1",
-      isLatest: true
+      isLatest: true,
     });
 
     expect(html).toContain("Legs &amp; &lt;Arms&gt;");
@@ -59,7 +59,7 @@ describe("renderWorkoutPage", () => {
     expect(html).toContain("Day 1 &lt;Alpha&gt;");
     expect(html).toContain("Upper &amp; Back 7.5");
     expect(html).toContain("Press &amp; &lt;Pull&gt;");
-    expect(html).toContain("<div class=\"group-label\">Superset</div>");
+    expect(html).toContain('<div class="group-label">Superset</div>');
     expect(html).toContain("Latest event");
   });
 });

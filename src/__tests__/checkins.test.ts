@@ -10,19 +10,19 @@ vi.mock("../config", () => ({
   readConfig,
   resolveBaseUrl,
   resolveToken,
-  writeConfig
+  writeConfig,
 }));
 
 const postJson = vi.fn();
 
 vi.mock("../http", () => ({
-  postJson
+  postJson,
 }));
 
 const printResponse = vi.fn();
 
 vi.mock("../output", () => ({
-  printResponse
+  printResponse,
 }));
 
 const extractUserUuidFromCheckins = vi.fn();
@@ -30,19 +30,19 @@ const isTokenExpiredResponse = vi.fn();
 
 vi.mock("../responses", () => ({
   extractUserUuidFromCheckins,
-  isTokenExpiredResponse
+  isTokenExpiredResponse,
 }));
 
 const loginAndPersist = vi.fn();
 
 vi.mock("../auth", () => ({
-  loginAndPersist
+  loginAndPersist,
 }));
 
 const printUsage = vi.fn();
 
 vi.mock("../usage", () => ({
-  printUsage
+  printUsage,
 }));
 
 const { handleCheckins } = await import("../commands/checkins");
@@ -67,9 +67,7 @@ describe("handleCheckins", () => {
   });
 
   it("throws on unknown action", async () => {
-    await expect(handleCheckins(["nope"], {})).rejects.toThrow(
-      "Unknown checkins action: nope"
-    );
+    await expect(handleCheckins(["nope"], {})).rejects.toThrow("Unknown checkins action: nope");
   });
 
   it("logs in when token is missing and updates user uuid", async () => {
@@ -84,7 +82,7 @@ describe("handleCheckins", () => {
       "/api/v2/checkin/list",
       "token-2",
       "https://api.kahunas.io",
-      { page: 1, rpp: 12 }
+      { page: 1, rpp: 12 },
     );
     expect(writeConfig).toHaveBeenCalledWith({ userUuid: "user-new" });
     expect(printResponse).toHaveBeenCalledTimes(1);

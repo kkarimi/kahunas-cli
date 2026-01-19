@@ -3,7 +3,7 @@ import {
   addMillisecondsIso,
   formatHumanTimestamp,
   isIsoAfterNow,
-  isoFromUnixSeconds
+  isoFromUnixSeconds,
 } from "../datetime";
 
 describe("datetime helpers", () => {
@@ -37,9 +37,7 @@ describe("datetime helpers", () => {
   });
 
   it("adds milliseconds to ISO timestamps", () => {
-    expect(addMillisecondsIso("2024-01-02T12:00:00Z", 1000)).toBe(
-      "2024-01-02T12:00:01.000Z"
-    );
+    expect(addMillisecondsIso("2024-01-02T12:00:00Z", 1000)).toBe("2024-01-02T12:00:01.000Z");
     expect(addMillisecondsIso("not-a-date", 1000)).toBeUndefined();
   });
 });

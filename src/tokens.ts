@@ -94,8 +94,7 @@ export function resolveTokenExpiry(token: string, tokenUpdatedAt: string): strin
 function decodeBase64Url(value: string): string | undefined {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padding = normalized.length % 4;
-  const padded =
-    padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
+  const padded = padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
   try {
     return Buffer.from(padded, "base64").toString("utf-8");
   } catch {

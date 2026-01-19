@@ -5,7 +5,7 @@ import {
   fromUnixTime,
   isBefore,
   isValid,
-  parseISO
+  parseISO,
 } from "date-fns";
 
 export function formatHumanTimestamp(value: string): string {

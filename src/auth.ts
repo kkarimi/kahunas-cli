@@ -1,6 +1,12 @@
 import type { Page } from "playwright";
 import type { AuthConfig, Config } from "./config";
-import { readAuthConfig, resolveCsrfToken, resolveWebBaseUrl, validateAuthConfig, writeConfig } from "./config";
+import {
+  readAuthConfig,
+  resolveCsrfToken,
+  resolveWebBaseUrl,
+  validateAuthConfig,
+  writeConfig,
+} from "./config";
 import { fetchAuthToken } from "./http";
 import { extractToken, isLikelyAuthToken, resolveTokenExpiry } from "./tokens";
 import { debugLog, waitForEnter } from "./utils";
@@ -32,45 +38,45 @@ type StoredAuth = {
 
 const LOGIN_SELECTORS = {
   username: [
-    "input[name=\"email\"]",
-    "input[id=\"email\"]",
-    "input[type=\"email\"]",
-    "input[autocomplete=\"email\"]",
-    "input[autocomplete=\"username\"]",
-    "input[name=\"username\"]",
-    "input[id=\"username\"]",
-    "input[placeholder*=\"email\" i]",
-    "input[placeholder*=\"username\" i]",
-    "input[type=\"text\"]"
+    'input[name="email"]',
+    'input[id="email"]',
+    'input[type="email"]',
+    'input[autocomplete="email"]',
+    'input[autocomplete="username"]',
+    'input[name="username"]',
+    'input[id="username"]',
+    'input[placeholder*="email" i]',
+    'input[placeholder*="username" i]',
+    'input[type="text"]',
   ],
   password: [
-    "input[name=\"password\"]",
-    "input[id=\"password\"]",
-    "input[type=\"password\"]",
-    "input[autocomplete=\"current-password\"]"
+    'input[name="password"]',
+    'input[id="password"]',
+    'input[type="password"]',
+    'input[autocomplete="current-password"]',
   ],
   submit: [
-    "button[type=\"submit\"]",
-    "input[type=\"submit\"]",
-    "button:has-text(\"Log in\")",
-    "button:has-text(\"Login\")",
-    "button:has-text(\"Sign in\")",
-    "button:has-text(\"Continue\")"
-  ]
+    'button[type="submit"]',
+    'input[type="submit"]',
+    'button:has-text("Log in")',
+    'button:has-text("Login")',
+    'button:has-text("Sign in")',
+    'button:has-text("Continue")',
+  ],
 };
 
 const PASSWORD_SELECTOR = LOGIN_SELECTORS.password.join(", ");
 const WORKOUT_NAV_SELECTORS = [
   "#client-workout_plan-view-button",
-  ".select-client-action[data-action=\"workout_program\"]",
-  "[data-action=\"workout_program\"]"
+  '.select-client-action[data-action="workout_program"]',
+  '[data-action="workout_program"]',
 ];
 const WORKOUT_NAV_QUERY_SELECTORS = [
   "#client-workout_plan-view-button",
-  ".select-client-action[data-action=\"workout_program\"]",
-  "[data-action=\"workout_program\"]",
+  '.select-client-action[data-action="workout_program"]',
+  '[data-action="workout_program"]',
   "a.nav-link",
-  "button"
+  "button",
 ];
 
 function normalizePath(pathname: string): string {
@@ -98,7 +104,7 @@ function resolveStoredAuth(override?: AuthConfig): StoredAuth | undefined {
   return {
     login,
     password: auth.password,
-    loginPath: auth.loginPath
+    loginPath: auth.loginPath,
   };
 }
 
@@ -122,7 +128,7 @@ async function findVisibleSelector(page: Page, selectors: string[]): Promise<str
 async function waitForAnyVisibleSelector(
   page: Page,
   selectors: string[],
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<boolean> {
   const combined = selectors.join(", ");
   try {
@@ -136,7 +142,7 @@ async function waitForAnyVisibleSelector(
 async function waitForAnySelectorMatch(
   page: Page,
   selectors: string[],
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<boolean> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -161,11 +167,7 @@ async function waitForPasswordFieldGone(page: Page, timeoutMs: number): Promise<
   return false;
 }
 
-async function attemptAutoLogin(
-  page: Page,
-  auth: StoredAuth,
-  debug: boolean
-): Promise<boolean> {
+async function attemptAutoLogin(page: Page, auth: StoredAuth, debug: boolean): Promise<boolean> {
   const hasLoginForm = await waitForAnyVisibleSelector(page, LOGIN_SELECTORS.password, 5000);
   if (!hasLoginForm) {
     debugLog(debug, "Login form not detected; skipping auto-login.");
@@ -230,21 +232,17 @@ async function clickWorkoutNav(page: Page, debug: boolean): Promise<boolean> {
     return await page.evaluate((selectors) => {
       const resolveCandidates = (sel: string): HTMLElement[] =>
         Array.from(document.querySelectorAll(sel)).filter(
-          (node): node is HTMLElement => node instanceof HTMLElement
+          (node): node is HTMLElement => node instanceof HTMLElement,
         );
       const candidates = selectors.flatMap(resolveCandidates);
-      const byAction = candidates.find(
-        (node) => node.dataset.action === "workout_program"
-      );
-      const byText = candidates.find((node) =>
-        /workout/i.test(node.textContent ?? "")
-      );
+      const byAction = candidates.find((node) => node.dataset.action === "workout_program");
+      const byText = candidates.find((node) => /workout/i.test(node.textContent ?? ""));
       const target = byAction ?? byText;
       if (!target) {
         return false;
       }
       target.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+        new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
       );
       target.click();
       return true;
@@ -258,7 +256,7 @@ async function triggerWorkoutCapture(
   page: Page,
   webOrigin: string,
   plans: WorkoutPlan[],
-  debug: boolean
+  debug: boolean,
 ): Promise<boolean> {
   if (plans.length > 0) {
     return true;
@@ -281,7 +279,7 @@ async function triggerWorkoutCapture(
 export async function captureWorkoutsFromBrowser(
   options: Record<string, string>,
   config: Config,
-  authOverride?: AuthConfig
+  authOverride?: AuthConfig,
 ): Promise<BrowserWorkoutCapture> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
   const headless = config.headless ?? true;
@@ -380,7 +378,7 @@ export async function captureWorkoutsFromBrowser(
           debug,
           `Failed to fetch auth token via /get-token: ${
             error instanceof Error ? error.message : "unknown error"
-          }`
+          }`,
         );
       }
     }
@@ -397,7 +395,7 @@ export async function captureWorkoutsFromBrowser(
 
 export async function loginWithBrowser(
   options: Record<string, string>,
-  config: Config
+  config: Config,
 ): Promise<LoginResult> {
   const webBaseUrl = resolveWebBaseUrl(options, config);
   const headless = config.headless ?? true;
@@ -478,7 +476,7 @@ export async function loginWithBrowser(
       const { token: extractedToken, raw: fetchedRaw } = await fetchAuthToken(
         csrfToken,
         cookieHeader,
-        webBaseUrl
+        webBaseUrl,
       );
       recordToken(extractedToken);
       raw = fetchedRaw;
@@ -497,7 +495,7 @@ export async function loginWithBrowser(
 export async function loginAndPersist(
   options: Record<string, string>,
   config: Config,
-  outputMode: "silent" | "token" | "raw"
+  outputMode: "silent" | "token" | "raw",
 ): Promise<string> {
   const result = await loginWithBrowser(options, config);
   const tokenUpdatedAt = new Date().toISOString();
@@ -507,7 +505,7 @@ export async function loginAndPersist(
     token: result.token,
     webBaseUrl: result.webBaseUrl,
     tokenUpdatedAt,
-    tokenExpiresAt
+    tokenExpiresAt,
   };
   if (result.csrfToken) {
     nextConfig.csrfToken = result.csrfToken;

@@ -20,7 +20,7 @@ export async function runCli(argv: string[], deps: RunCliDeps = {}): Promise<voi
     isFlagEnabled: isFlagEnabledImpl = isFlagEnabled,
     handleCheckins: handleCheckinsImpl = handleCheckins,
     handleWorkout: handleWorkoutImpl = handleWorkout,
-    printUsage: printUsageImpl = printUsage
+    printUsage: printUsageImpl = printUsage,
   } = deps;
 
   const { positionals, options } = parseArgsImpl(argv);

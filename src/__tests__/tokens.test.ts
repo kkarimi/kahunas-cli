@@ -12,9 +12,7 @@ describe("isLikelyAuthToken", () => {
   });
 
   it("accepts base64-ish tokens", () => {
-    expect(
-      isLikelyAuthToken("abcd+1234/efghijklmnopqrstuv=1234567890abcd")
-    ).toBe(true);
+    expect(isLikelyAuthToken("abcd+1234/efghijklmnopqrstuv=1234567890abcd")).toBe(true);
   });
 });
 

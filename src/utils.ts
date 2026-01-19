@@ -14,7 +14,7 @@ export function parseNumber(value: string | undefined, fallback: number): number
 
 export function askQuestion(
   prompt: string,
-  output: NodeJS.WritableStream = process.stdout
+  output: NodeJS.WritableStream = process.stdout,
 ): Promise<string> {
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output });
@@ -27,14 +27,14 @@ export function askQuestion(
 
 export function waitForEnter(
   prompt: string,
-  output: NodeJS.WritableStream = process.stdout
+  output: NodeJS.WritableStream = process.stdout,
 ): Promise<void> {
   return askQuestion(prompt, output).then(() => undefined);
 }
 
 export function askHiddenQuestion(
   prompt: string,
-  output: NodeJS.WritableStream = process.stderr
+  output: NodeJS.WritableStream = process.stderr,
 ): Promise<string> {
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output, terminal: true });

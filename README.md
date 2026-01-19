@@ -4,14 +4,14 @@ Fetch workouts from Kahunas and preview them locally.
 
 ## Quick start
 
-1) Install and build:
+1. Install and build:
 
 ```bash
 pnpm install
 pnpm build
 ```
 
-2) Optional: add auto-login credentials at `~/.config/kahunas/auth.json`:
+2. Optional: add auto-login credentials at `~/.config/kahunas/auth.json`:
 
 ```json
 {
@@ -20,7 +20,7 @@ pnpm build
 }
 ```
 
-3) Sync workouts, then run the preview server:
+3. Sync workouts, then run the preview server:
 
 ```bash
 pnpm kahunas sync

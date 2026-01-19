@@ -22,7 +22,7 @@ function mapWorkoutPlan(entry: Record<string, unknown>): WorkoutPlan | undefined
     title,
     updated_at_utc: typeof entry.updated_at_utc === "number" ? entry.updated_at_utc : undefined,
     created_at_utc: typeof entry.created_at_utc === "number" ? entry.created_at_utc : undefined,
-    days: typeof entry.days === "number" ? entry.days : undefined
+    days: typeof entry.days === "number" ? entry.days : undefined,
   };
 }
 

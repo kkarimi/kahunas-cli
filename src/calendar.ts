@@ -15,15 +15,11 @@ export type CalendarFetchResult = {
 };
 
 export function resolveCalendarTimezone(): string {
-  return (
-    process.env.TZ ??
-    Intl.DateTimeFormat().resolvedOptions().timeZone ??
-    "Europe/London"
-  );
+  return process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "Europe/London";
 }
 
 export async function fetchCalendarEvents(
-  options: CalendarFetchOptions
+  options: CalendarFetchOptions,
 ): Promise<CalendarFetchResult> {
   const timezone = options.timezone ?? resolveCalendarTimezone();
   const webOrigin = new URL(options.webBaseUrl).origin;
@@ -42,9 +38,9 @@ export async function fetchCalendarEvents(
       cookie: options.cookieHeader,
       origin: webOrigin,
       referer: `${webOrigin}/dashboard`,
-      "x-requested-with": "XMLHttpRequest"
+      "x-requested-with": "XMLHttpRequest",
     },
-    body: body.toString()
+    body: body.toString(),
   });
 
   const text = await response.text();

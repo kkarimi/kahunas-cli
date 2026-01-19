@@ -11,7 +11,7 @@ import {
   safeParse,
   string,
   trim,
-  type InferOutput
+  type InferOutput,
 } from "valibot";
 import type { WorkoutEventSummary } from "./events";
 import type { WorkoutPlan } from "./workouts";
@@ -21,12 +21,7 @@ const DEFAULT_WEB_BASE_URL = "https://kahunas.io";
 
 export const CONFIG_PATH = path.join(os.homedir(), ".config", "kahunas", "config.json");
 export const AUTH_PATH = path.join(os.homedir(), ".config", "kahunas", "auth.json");
-export const WORKOUT_CACHE_PATH = path.join(
-  os.homedir(),
-  ".config",
-  "kahunas",
-  "workouts.json"
-);
+export const WORKOUT_CACHE_PATH = path.join(os.homedir(), ".config", "kahunas", "workouts.json");
 export const CACHE_DIR_PATH = path.join(os.homedir(), ".config", "kahunas", "cache");
 
 export type Config = {
@@ -55,9 +50,9 @@ const AuthConfigSchema = pipe(
     username: optional(pipe(string(), trim(), minLength(1, "Missing username."))),
     email: optional(pipe(string(), trim(), minLength(1, "Missing email."))),
     password: pipe(string("Missing password."), trim(), minLength(1, "Missing password.")),
-    loginPath: optional(string())
+    loginPath: optional(string()),
   }),
-  check((input) => Boolean(input.username || input.email), "Missing username or email.")
+  check((input) => Boolean(input.username || input.email), "Missing username or email."),
 );
 
 export type ValidAuthConfig = InferOutput<typeof AuthConfigSchema>;
@@ -130,10 +125,7 @@ export function validateAuthConfig(auth: AuthConfig): ValidAuthConfig {
   }
 
   const detail =
-    flat.root?.[0] ??
-    flat.other?.[0] ??
-    flat.nested?.password?.[0] ??
-    "Invalid auth.json format.";
+    flat.root?.[0] ?? flat.other?.[0] ?? flat.nested?.password?.[0] ?? "Invalid auth.json format.";
   throw new Error(`Invalid auth.json at ${AUTH_PATH}. ${detail}`);
 }
 
@@ -157,7 +149,7 @@ export function readWorkoutCache(): WorkoutCache | undefined {
 
 export function writeWorkoutCache(
   plans: WorkoutPlan[],
-  events?: WorkoutEventsCache | null
+  events?: WorkoutEventsCache | null,
 ): WorkoutCache {
   const dir = path.dirname(WORKOUT_CACHE_PATH);
   fs.mkdirSync(dir, { recursive: true });

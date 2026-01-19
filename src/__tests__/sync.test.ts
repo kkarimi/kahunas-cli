@@ -29,20 +29,20 @@ vi.mock("../config", () => ({
   resolveCsrfCookie,
   resolveAuthCookie,
   resolveUserUuid,
-  resolveWebBaseUrl
+  resolveWebBaseUrl,
 }));
 
 const postJson = vi.fn();
 
 vi.mock("../http", () => ({
-  postJson
+  postJson,
 }));
 
 const captureWorkoutsFromBrowser = vi.fn();
 
 vi.mock("../auth", () => ({
   captureWorkoutsFromBrowser,
-  loginAndPersist: vi.fn()
+  loginAndPersist: vi.fn(),
 }));
 
 const askQuestion = vi.fn();
@@ -52,7 +52,7 @@ vi.mock("../utils", () => ({
   askQuestion,
   askHiddenQuestion,
   debugLog: vi.fn(),
-  waitForEnter: vi.fn()
+  waitForEnter: vi.fn(),
 }));
 
 const { handleWorkout } = await import("../commands/workout");
@@ -78,7 +78,7 @@ describe("workout sync flow", () => {
     writeWorkoutCache.mockReturnValue({
       updatedAt: "2026-01-01T00:00:00.000Z",
       plans: [],
-      events: null
+      events: null,
     });
   });
 
@@ -89,7 +89,10 @@ describe("workout sync flow", () => {
 
   afterAll(() => {
     Object.defineProperty(process.stdin, "isTTY", { value: originalIsTTY, configurable: true });
-    Object.defineProperty(process.stdout, "isTTY", { value: originalStdoutIsTTY, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: originalStdoutIsTTY,
+      configurable: true,
+    });
   });
 
   it("prompts for credentials and writes auth after successful capture", async () => {
@@ -98,39 +101,29 @@ describe("workout sync flow", () => {
     captureWorkoutsFromBrowser.mockResolvedValue({
       plans: [],
       token: "header.payload.signature",
-      webBaseUrl: "https://kahunas.io"
+      webBaseUrl: "https://kahunas.io",
     });
 
     await handleWorkout(["sync"], {});
 
     expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual({
-      message: "Workout programs synced",
-      cache: {
-        updated_at: "2026-01-01T00:00:00.000Z",
-        count: 0,
-        path: "/tmp/kahunas/workouts.json",
-        data: {
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          plans: [],
-          events: null
-        }
-      }
-    });
+    expect(logSpy.mock.calls[0][0]).toBe(
+      "Synced 0 programs. Stored at /tmp/kahunas/workouts.json.",
+    );
     expect(errorSpy).toHaveBeenCalledWith("Saved credentials to /tmp/kahunas/auth.json");
     expect(captureWorkoutsFromBrowser).toHaveBeenCalledTimes(1);
     expect(captureWorkoutsFromBrowser.mock.calls[0][2]).toEqual({
       email: "user@example.com",
       username: undefined,
-      password: "secret"
+      password: "secret",
     });
     expect(writeAuthConfig).toHaveBeenCalledWith({
       email: "user@example.com",
       username: undefined,
-      password: "secret"
+      password: "secret",
     });
     expect(writeAuthConfig.mock.invocationCallOrder[0]).toBeGreaterThan(
-      captureWorkoutsFromBrowser.mock.invocationCallOrder[0]
+      captureWorkoutsFromBrowser.mock.invocationCallOrder[0],
     );
   });
 
@@ -140,25 +133,15 @@ describe("workout sync flow", () => {
     captureWorkoutsFromBrowser.mockResolvedValue({
       plans: [],
       token: undefined,
-      webBaseUrl: "https://kahunas.io"
+      webBaseUrl: "https://kahunas.io",
     });
 
     await handleWorkout(["sync"], {});
 
     expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual({
-      message: "Workout programs synced",
-      cache: {
-        updated_at: "2026-01-01T00:00:00.000Z",
-        count: 0,
-        path: "/tmp/kahunas/workouts.json",
-        data: {
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          plans: [],
-          events: null
-        }
-      }
-    });
+    expect(logSpy.mock.calls[0][0]).toBe(
+      "Synced 0 programs. Stored at /tmp/kahunas/workouts.json.",
+    );
     expect(writeAuthConfig).not.toHaveBeenCalled();
   });
 
@@ -168,7 +151,7 @@ describe("workout sync flow", () => {
     captureWorkoutsFromBrowser.mockResolvedValue({
       plans: [],
       token: "header.payload.signature",
-      webBaseUrl: "https://kahunas.io"
+      webBaseUrl: "https://kahunas.io",
     });
 
     await handleWorkout(["sync"], { raw: "true" });

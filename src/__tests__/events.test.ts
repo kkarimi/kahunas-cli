@@ -6,18 +6,18 @@ import {
   filterWorkoutEvents,
   formatWorkoutEventsOutput,
   parseWorkoutDayPreview,
-  sortWorkoutEvents
+  sortWorkoutEvents,
 } from "../events";
 
 describe("filterWorkoutEvents", () => {
   it("filters by program and workout", () => {
     const payload = [
       { id: 1, program: "p1", workout: "w1" },
-      { id: 2, program: "p2", workout: "w2" }
+      { id: 2, program: "p2", workout: "w2" },
     ];
     expect(filterWorkoutEvents(payload, "p1")).toEqual([{ id: 1, program: "p1", workout: "w1" }]);
     expect(filterWorkoutEvents(payload, undefined, "w2")).toEqual([
-      { id: 2, program: "p2", workout: "w2" }
+      { id: 2, program: "p2", workout: "w2" },
     ]);
   });
 });
@@ -26,7 +26,7 @@ describe("sortWorkoutEvents", () => {
   it("sorts by start time ascending", () => {
     const events = [
       { id: 1, start: "2025-01-02 10:00:00" },
-      { id: 2, start: "2025-01-01 10:00:00" }
+      { id: 2, start: "2025-01-01 10:00:00" },
     ];
     const sorted = sortWorkoutEvents(events);
     expect(sorted.map((event) => event.id)).toEqual([2, 1]);
@@ -40,7 +40,7 @@ describe("enrichWorkoutEvents", () => {
     expect(enriched[0]).toMatchObject({
       id: 1,
       program: "p1",
-      program_details: { title: "Program" }
+      program_details: { title: "Program" },
     });
   });
 });
@@ -49,13 +49,13 @@ describe("parseWorkoutDayPreview", () => {
   it("parses volume sets and sections", () => {
     const html = readFileSync(
       new URL("./fixtures/workout-day-preview.html", import.meta.url),
-      "utf8"
+      "utf8",
     );
     const summary = parseWorkoutDayPreview(html, 0);
     expect(summary).not.toBeNull();
     expect(summary?.total_volume_sets).toEqual([
       { body_part: "Upper Back", sets: 7.5 },
-      { body_part: "Biceps", sets: 3 }
+      { body_part: "Biceps", sets: 3 },
     ]);
     expect(summary?.sections).toHaveLength(2);
     expect(summary?.sections[0].label).toBe("Warm Up");
@@ -70,7 +70,7 @@ describe("parseWorkoutDayPreview", () => {
   it("parses body parts and time-based exercises", () => {
     const html = readFileSync(
       new URL("./fixtures/workout-day-preview.html", import.meta.url),
-      "utf8"
+      "utf8",
     );
     const summary = parseWorkoutDayPreview(html, 0);
     const workoutGroups = summary?.sections[1].groups ?? [];
@@ -87,7 +87,7 @@ describe("parseWorkoutDayPreview", () => {
   it("uses the display-block day when no index is provided", () => {
     const html = readFileSync(
       new URL("./fixtures/workout-day-preview.html", import.meta.url),
-      "utf8"
+      "utf8",
     );
     const summary = parseWorkoutDayPreview(html);
     expect(summary?.total_volume_sets[0]?.body_part).toBe("Upper Back");
@@ -98,12 +98,16 @@ describe("formatWorkoutEventsOutput", () => {
   it("formats events with preview summaries", () => {
     const html = readFileSync(
       new URL("./fixtures/workout-day-preview.html", import.meta.url),
-      "utf8"
+      "utf8",
     );
     const events = [{ id: 1, start: "2025-01-01 10:00:00", program: "p1", day: 0 }];
-    const output = formatWorkoutEventsOutput(events, { p1: { title: "Push Day", preview: html } }, {
-      timezone: "Europe/London"
-    });
+    const output = formatWorkoutEventsOutput(
+      events,
+      { p1: { title: "Push Day", preview: html } },
+      {
+        timezone: "Europe/London",
+      },
+    );
     expect(output.source).toBe("calendar");
     expect(output.events).toHaveLength(1);
     expect(output.events[0].program?.title).toBe("Push Day");
@@ -116,18 +120,14 @@ describe("formatWorkoutEventsOutput", () => {
         {
           day_number: 1,
           title: "Day 1: Anterior",
-          workout: [
-            { exercise_name: "Bench Press", sets: 3, reps: "5-8reps", rest_period: "120" }
-          ]
+          workout: [{ exercise_name: "Bench Press", sets: 3, reps: "5-8reps", rest_period: "120" }],
         },
         {
           day_number: 2,
           title: "Day 2: Posterior",
-          workout: [
-            { exercise_name: "Deadlift", sets: 3, reps: "3-5reps", rest_period: "180" }
-          ]
-        }
-      ]
+          workout: [{ exercise_name: "Deadlift", sets: 3, reps: "3-5reps", rest_period: "180" }],
+        },
+      ],
     };
     const events = [{ id: 1, title: "Day 2: Posterior", program: "p1", start: "2025-01-02" }];
     const output = formatWorkoutEventsOutput(events, { p1: program }, { timezone: "UTC" });
@@ -153,14 +153,14 @@ describe("formatWorkoutEventsOutput", () => {
                   type: "straight",
                   exercises: [
                     { name: "Squat", sequence: "1" },
-                    { name: "Row", sequence: "2" }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      }
+                    { name: "Row", sequence: "2" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
     ];
     const annotated = annotateWorkoutEventSummaries(events);
     const exercises = annotated[0].workout_day?.sections[0].groups[0].exercises ?? [];
@@ -180,27 +180,27 @@ describe("formatWorkoutEventsOutput", () => {
               warmup: [
                 {
                   type: "normal",
-                  list: [{ exercise_name: "Band Pull Apart", sets: "1", reps: "15" }]
-                }
+                  list: [{ exercise_name: "Band Pull Apart", sets: "1", reps: "15" }],
+                },
               ],
               workout: [
                 {
                   type: "normal",
-                  list: [{ exercise_name: "Deadlift", sets: "3", reps: "5" }]
+                  list: [{ exercise_name: "Deadlift", sets: "3", reps: "5" }],
                 },
                 {
                   type: "superset",
                   list: [
                     { exercise_name: "Row", sets: "3", reps: "8" },
-                    { exercise_name: "Curl", sets: "3", reps: "10" }
-                  ]
-                }
+                    { exercise_name: "Curl", sets: "3", reps: "10" },
+                  ],
+                },
               ],
-              cooldown: []
-            }
-          }
-        ]
-      }
+              cooldown: [],
+            },
+          },
+        ],
+      },
     };
     const events = [{ id: 3, title: "Posterior", program: "p3" }];
     const output = formatWorkoutEventsOutput(events, { p3: program }, { timezone: "UTC" });
@@ -225,11 +225,11 @@ describe("formatWorkoutEventsOutput", () => {
             {
               exercise: { name: "Hip Thrust", uuid: "ex-1" },
               sets: "4",
-              reps: "8-10"
-            }
-          ]
-        }
-      ]
+              reps: "8-10",
+            },
+          ],
+        },
+      ],
     };
     const events = [{ id: 2, title: "Posterior", program: "p2" }];
     const output = formatWorkoutEventsOutput(events, { p2: program }, { timezone: "UTC" });

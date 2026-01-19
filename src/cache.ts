@@ -57,7 +57,7 @@ function safeTimestamp(value: string): string {
 
 export function writeCalendarCache(
   payload: unknown,
-  metadata: { timezone: string; userUuid?: string }
+  metadata: { timezone: string; userUuid?: string },
 ): CalendarCachePayload {
   ensureCacheDir();
   const updatedAt = new Date().toISOString();
@@ -66,19 +66,19 @@ export function writeCalendarCache(
     updatedAt,
     timezone: metadata.timezone,
     userUuid: metadata.userUuid,
-    payload
+    payload,
   };
   fs.writeFileSync(
     path.join(CACHE_DIR_PATH, file),
     `${JSON.stringify(record, null, 2)}\n`,
-    "utf-8"
+    "utf-8",
   );
   const index = readCacheIndex();
   index.calendar = {
     file,
     updatedAt,
     timezone: metadata.timezone,
-    userUuid: metadata.userUuid
+    userUuid: metadata.userUuid,
   };
   writeCacheIndex(index);
   return record;
@@ -94,7 +94,7 @@ export function writeProgramCache(programId: string, payload: unknown): void {
   fs.writeFileSync(
     path.join(CACHE_DIR_PATH, file),
     `${JSON.stringify(payload, null, 2)}\n`,
-    "utf-8"
+    "utf-8",
   );
   const index = readCacheIndex();
   index.programs[programId] = { file, updatedAt };

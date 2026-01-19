@@ -52,7 +52,7 @@ export function summarizeWorkoutProgramDays(program: unknown): WorkoutDaySummary
     const key = [
       candidate.day_index ?? "none",
       candidate.day_label ?? "unknown",
-      candidate.sections.length
+      candidate.sections.length,
     ].join("|");
     if (seen.has(key)) {
       continue;
@@ -81,7 +81,7 @@ export function summarizeWorkoutProgramDays(program: unknown): WorkoutDaySummary
 export function filterWorkoutEvents(
   payload: unknown,
   programFilter?: string,
-  workoutFilter?: string
+  workoutFilter?: string,
 ): WorkoutEvent[] {
   if (!Array.isArray(payload)) {
     return [];
@@ -111,7 +111,7 @@ export function sortWorkoutEvents(events: WorkoutEvent[]): WorkoutEvent[] {
 
 export function enrichWorkoutEvents(
   events: WorkoutEvent[],
-  programDetails: Record<string, unknown>
+  programDetails: Record<string, unknown>,
 ): WorkoutEvent[] {
   return events.map((entry) => {
     if (!entry || typeof entry !== "object") {
@@ -122,7 +122,7 @@ export function enrichWorkoutEvents(
     const program = programUuid ? programDetails[programUuid] : undefined;
     return {
       ...record,
-      program_details: program ?? null
+      program_details: program ?? null,
     };
   });
 }
@@ -130,13 +130,13 @@ export function enrichWorkoutEvents(
 type WorkoutOutputOptions = { timezone: string; program?: string; workout?: string };
 
 const HTML_ENTITY_MAP: Record<string, string> = {
-  "&quot;": "\"",
-  "&#34;": "\"",
+  "&quot;": '"',
+  "&#34;": '"',
   "&apos;": "'",
   "&#39;": "'",
   "&amp;": "&",
   "&lt;": "<",
-  "&gt;": ">"
+  "&gt;": ">",
 };
 
 const DAY_INDEX_KEYS = [
@@ -145,7 +145,7 @@ const DAY_INDEX_KEYS = [
   "day",
   "workout_day",
   "day_number",
-  "workout_day_number"
+  "workout_day_number",
 ];
 
 export type PreviewHtmlMatch = { html: string; source: string };
@@ -153,7 +153,7 @@ export type PreviewHtmlMatch = { html: string; source: string };
 export function formatWorkoutEventsOutput(
   events: WorkoutEvent[],
   programDetails: Record<string, unknown>,
-  options: WorkoutOutputOptions
+  options: WorkoutOutputOptions,
 ): {
   source: "calendar";
   timezone: string;
@@ -165,9 +165,9 @@ export function formatWorkoutEventsOutput(
     timezone: options.timezone,
     filters: {
       program: options.program ?? null,
-      workout: options.workout ?? null
+      workout: options.workout ?? null,
     },
-    events: events.map((event) => formatWorkoutEvent(event, programDetails))
+    events: events.map((event) => formatWorkoutEvent(event, programDetails)),
   };
 }
 
@@ -210,13 +210,13 @@ export function parseWorkoutDayPreview(html: string, dayIndex?: number): Workout
     day_index: resolvedIndex,
     day_label: resolvedIndex === undefined ? undefined : `Day ${resolvedIndex + 1}`,
     total_volume_sets: totalVolumeSets,
-    sections
+    sections,
   };
 }
 
 function formatWorkoutEvent(
   event: WorkoutEvent,
-  programDetails: Record<string, unknown>
+  programDetails: Record<string, unknown>,
 ): WorkoutEventSummary {
   const record = event as Record<string, unknown>;
   const programUuid = typeof record.program === "string" ? record.program : undefined;
@@ -238,15 +238,15 @@ function formatWorkoutEvent(
       id: typeof record.id === "number" || typeof record.id === "string" ? record.id : undefined,
       start: typeof record.start === "string" ? record.start : undefined,
       end: typeof record.end === "string" ? record.end : undefined,
-      title: typeof record.title === "string" ? record.title : undefined
+      title: typeof record.title === "string" ? record.title : undefined,
     },
     program: programSummary,
-    workout_day: workoutDay
+    workout_day: workoutDay,
   };
 }
 
 export function annotateWorkoutEventSummaries(
-  events: WorkoutEventSummary[]
+  events: WorkoutEventSummary[],
 ): WorkoutEventSummary[] {
   return events.map((event) => {
     if (!event.workout_day) {
@@ -265,12 +265,12 @@ export function annotateWorkoutEventSummaries(
             ...exercise,
             order: derivedOrder,
             performed_at: performedAt ?? exercise.performed_at,
-            performed_on: performedOn ?? exercise.performed_on
+            performed_on: performedOn ?? exercise.performed_on,
           };
           order += 1;
           return next;
-        })
-      }))
+        }),
+      })),
     }));
     return { ...event, workout_day: { ...event.workout_day, sections } };
   });
@@ -284,10 +284,9 @@ function resolvePerformedOn(value: string | undefined): string | undefined {
   return match ? match[1] : value;
 }
 
-
 function deriveWorkoutDayFromProgram(
   program: unknown,
-  event: Record<string, unknown>
+  event: Record<string, unknown>,
 ): WorkoutDaySummary | null {
   if (!program || typeof program !== "object") {
     return null;
@@ -313,9 +312,7 @@ function deriveWorkoutDayFromProgram(
         return false;
       }
       const normalizedLabel = normalizeLabel(candidate.day_label);
-      return (
-        normalizedLabel.includes(normalizedTitle) || normalizedTitle.includes(normalizedLabel)
-      );
+      return normalizedLabel.includes(normalizedTitle) || normalizedTitle.includes(normalizedLabel);
     });
     if (match) {
       return match;
@@ -352,7 +349,7 @@ function extractProgramDayCandidates(program: unknown): WorkoutDaySummary[] {
         day_index: dayIndex,
         day_label: dayLabel,
         total_volume_sets: totalVolume,
-        sections
+        sections,
       });
     }
     queue.push(...Object.values(record));
@@ -367,17 +364,14 @@ function extractSectionsFromRecord(record: Record<string, unknown>): WorkoutSect
     return exerciseListSections;
   }
   const warmup = extractExercisesFromValue(
-    record.warmup ?? record.warm_up ?? record.warm_up_exercises ?? record.warmups
+    record.warmup ?? record.warm_up ?? record.warm_up_exercises ?? record.warmups,
   );
   if (warmup.length > 0) {
     sections.push({ type: "warm_up", label: "Warm Up", groups: wrapExercises(warmup) });
   }
 
   const workout = extractExercisesFromValue(
-    record.workout ??
-      record.workout_exercises ??
-      record.exercises ??
-      record.exercise
+    record.workout ?? record.workout_exercises ?? record.exercises ?? record.exercise,
   );
   if (workout.length > 0) {
     sections.push({ type: "workout", label: "Workout", groups: wrapExercises(workout) });
@@ -422,7 +416,7 @@ function extractExerciseGroupsFromList(value: unknown): WorkoutExerciseGroup[] {
     }
     const record = entry as Record<string, unknown>;
     const exercises = extractExercisesFromValue(
-      record.list ?? record.exercises ?? record.exercise ?? record.items
+      record.list ?? record.exercises ?? record.exercise ?? record.items,
     );
     if (exercises.length === 0) {
       continue;
@@ -497,9 +491,10 @@ function looksLikeExerciseRecord(record: Record<string, unknown>): boolean {
 }
 
 function parseExerciseFromRecord(record: Record<string, unknown>): WorkoutExerciseSummary | null {
-  const nested = record.exercise && typeof record.exercise === "object"
-    ? (record.exercise as Record<string, unknown>)
-    : undefined;
+  const nested =
+    record.exercise && typeof record.exercise === "object"
+      ? (record.exercise as Record<string, unknown>)
+      : undefined;
   const name =
     typeof record.exercise_name === "string"
       ? record.exercise_name
@@ -511,7 +506,7 @@ function parseExerciseFromRecord(record: Record<string, unknown>): WorkoutExerci
             ? nested.exercise_name
             : typeof nested?.title === "string"
               ? nested.title
-          : undefined;
+              : undefined;
   if (!name) {
     return null;
   }
@@ -525,15 +520,15 @@ function parseExerciseFromRecord(record: Record<string, unknown>): WorkoutExerci
           ? record.rep
           : typeof record.repetition === "string"
             ? record.repetition
-        : undefined;
+            : undefined;
   const rest = parseNumber(
-    (record.rest_period ?? record.rest ?? record.rest_seconds) as string | undefined
+    (record.rest_period ?? record.rest ?? record.rest_seconds) as string | undefined,
   );
   const time = parseNumber(
-    (record.time_period ?? record.time ?? record.duration) as string | undefined
+    (record.time_period ?? record.time ?? record.duration) as string | undefined,
   );
   const bodyParts = extractBodyPartsFromValue(
-    record.bodypart ?? record.body_parts ?? nested?.bodypart ?? nested?.body_parts
+    record.bodypart ?? record.body_parts ?? nested?.bodypart ?? nested?.body_parts,
   );
   const sequence =
     typeof record.number === "string" || typeof record.number === "number"
@@ -546,7 +541,7 @@ function parseExerciseFromRecord(record: Record<string, unknown>): WorkoutExerci
             ? String(record.exercise_order)
             : typeof record.group_order === "string" || typeof record.group_order === "number"
               ? String(record.group_order)
-          : undefined;
+              : undefined;
 
   return {
     name,
@@ -569,9 +564,7 @@ function parseExerciseFromRecord(record: Record<string, unknown>): WorkoutExerci
   };
 }
 
-function extractBodyPartsFromValue(
-  value: unknown
-): Array<{ name: string; volume?: number }> {
+function extractBodyPartsFromValue(value: unknown): Array<{ name: string; volume?: number }> {
   if (!value) {
     return [];
   }
@@ -599,14 +592,11 @@ function extractBodyPartsFromValue(
       }
       return result;
     })
-    .filter(
-      (entry): entry is { name: string; volume?: number } =>
-        Boolean(entry && entry.name)
-    );
+    .filter((entry): entry is { name: string; volume?: number } => Boolean(entry && entry.name));
 }
 
 function extractMediaFromValue(
-  value: unknown
+  value: unknown,
 ): Array<{ file_url?: string; thumbnail_url?: string; file_type?: number }> {
   if (!value) {
     return [];
@@ -620,7 +610,7 @@ function extractMediaFromValue(
     .map((entry) => ({
       file_url: typeof entry.file_url === "string" ? entry.file_url : undefined,
       thumbnail_url: typeof entry.thumbnail_url === "string" ? entry.thumbnail_url : undefined,
-      file_type: typeof entry.file_type === "number" ? entry.file_type : undefined
+      file_type: typeof entry.file_type === "number" ? entry.file_type : undefined,
     }))
     .filter((entry) => Boolean(entry.file_url) || Boolean(entry.thumbnail_url));
 }
@@ -694,7 +684,7 @@ function resolveDayIndexFromRecord(record: Record<string, unknown>): number | un
 
 function resolveDayLabelFromRecord(
   record: Record<string, unknown>,
-  dayIndex?: number
+  dayIndex?: number,
 ): string | undefined {
   const label =
     typeof record.day_title === "string"
@@ -736,7 +726,7 @@ function normalizeLabel(value: string): string {
 
 export function resolveWorkoutEventDayIndex(
   event: WorkoutEvent,
-  program: unknown
+  program: unknown,
 ): number | undefined {
   return resolveEventDayIndex(event as Record<string, unknown>, program);
 }
@@ -776,7 +766,7 @@ export function findWorkoutPreviewHtmlMatch(value: unknown): PreviewHtmlMatch | 
 
 function resolveEventDayIndex(
   event: Record<string, unknown>,
-  program: unknown
+  program: unknown,
 ): number | undefined {
   for (const key of DAY_INDEX_KEYS) {
     const value = event[key];
@@ -821,7 +811,7 @@ function resolveEventDayIndex(
 
 function extractProgramSummary(
   uuid: string,
-  program: unknown
+  program: unknown,
 ): { uuid?: string; title?: string } | null {
   if (!program || typeof program !== "object") {
     return { uuid };
@@ -856,7 +846,7 @@ function extractWorkoutDayBlocks(html: string): Map<number, string> {
 
 function selectWorkoutDayBlock(
   blocks: Map<number, string>,
-  dayIndex?: number
+  dayIndex?: number,
 ): { index: number; html: string } | undefined {
   if (dayIndex !== undefined) {
     const direct = blocks.get(dayIndex);
@@ -944,7 +934,7 @@ function buildExerciseGroups(sectionHtml: string): WorkoutExerciseGroup[] {
   const supersetTables = extractSupersetTables(sectionHtml);
   const supersetRanges = supersetTables.map((table) => ({
     start: table.start,
-    end: table.end
+    end: table.end,
   }));
 
   const supersetGroups: Array<{ index: number; group: WorkoutExerciseGroup }> = [];
@@ -955,7 +945,7 @@ function buildExerciseGroups(sectionHtml: string): WorkoutExerciseGroup[] {
     }
     supersetGroups.push({
       index: table.start,
-      group: { type: "superset", label: "Superset", exercises }
+      group: { type: "superset", label: "Superset", exercises },
     });
   }
 
@@ -969,7 +959,7 @@ function buildExerciseGroups(sectionHtml: string): WorkoutExerciseGroup[] {
     }
     straightGroups.push({
       index: row.index,
-      group: { type: "straight", exercises: [row.exercise] }
+      group: { type: "straight", exercises: [row.exercise] },
     });
   }
 
@@ -979,7 +969,7 @@ function buildExerciseGroups(sectionHtml: string): WorkoutExerciseGroup[] {
 }
 
 function parseExercisesWithIndex(
-  html: string
+  html: string,
 ): Array<{ index: number; exercise: WorkoutExerciseSummary; classValue: string }> {
   const rows: Array<{ index: number; exercise: WorkoutExerciseSummary; classValue: string }> = [];
   const regex = /<tr\b[^>]*\bdata-exercise_name=(["']).*?\1[^>]*>/gi;
@@ -993,7 +983,7 @@ function parseExercisesWithIndex(
     rows.push({
       index: match.index,
       exercise,
-      classValue: extractAttribute(tag, "class") ?? ""
+      classValue: extractAttribute(tag, "class") ?? "",
     });
   }
   return rows;
@@ -1021,7 +1011,7 @@ function parseExerciseFromTag(tag: string): WorkoutExerciseSummary | null {
     notes: attrs["notes"] || undefined,
     sequence: attrs["number"] || undefined,
     body_parts: bodyParts.length > 0 ? bodyParts : undefined,
-    media: media.length > 0 ? media : undefined
+    media: media.length > 0 ? media : undefined,
   };
 }
 
@@ -1041,9 +1031,7 @@ function containsSmallerSuperset(candidate: TableBlock, candidates: TableBlock[]
     }
     const otherSize = other.end - other.start;
     return (
-      other.start >= candidate.start &&
-      other.end <= candidate.end &&
-      otherSize < candidateSize
+      other.start >= candidate.start && other.end <= candidate.end && otherSize < candidateSize
     );
   });
 }
@@ -1108,14 +1096,14 @@ function parseBodyParts(value: string | undefined): Array<{ name: string; volume
           : undefined;
     results.push({
       name,
-      volume: Number.isFinite(volumeValue) ? volumeValue : undefined
+      volume: Number.isFinite(volumeValue) ? volumeValue : undefined,
     });
   }
   return results;
 }
 
 function parseMedia(
-  value: string | undefined
+  value: string | undefined,
 ): Array<{ file_url?: string; thumbnail_url?: string; file_type?: number }> {
   if (!value) {
     return [];
@@ -1134,7 +1122,7 @@ function parseMedia(
     const fileUrl = typeof record.file_url === "string" ? record.file_url : undefined;
     const fileType = typeof record.file_type === "number" ? record.file_type : undefined;
     const mediaEntry: { file_url?: string; thumbnail_url?: string; file_type?: number } = {
-      file_type: fileType
+      file_type: fileType,
     };
     if (fileType === 2) {
       mediaEntry.thumbnail_url = fileUrl;
@@ -1255,7 +1243,7 @@ function findDayIndexById(program: unknown, id: number): number | undefined {
 
 function findDayIndexByMatcher(
   program: unknown,
-  matcher: (record: Record<string, unknown>) => boolean
+  matcher: (record: Record<string, unknown>) => boolean,
 ): number | undefined {
   const queue: Array<{ value: unknown; indexInArray?: number }> = [{ value: program }];
   while (queue.length > 0) {

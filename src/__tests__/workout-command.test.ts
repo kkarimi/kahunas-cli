@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const isFlagEnabled = vi.fn();
 
 vi.mock("../args", () => ({
-  isFlagEnabled
+  isFlagEnabled,
 }));
 
 const readConfig = vi.fn();
@@ -36,7 +36,7 @@ vi.mock("../config", () => ({
   resolveWebBaseUrl,
   writeConfig,
   writeAuthConfig,
-  writeWorkoutCache
+  writeWorkoutCache,
 }));
 
 const fetchWorkoutProgram = vi.fn();
@@ -48,7 +48,7 @@ vi.mock("../http", () => ({
   fetchWorkoutProgram,
   getWithAuth,
   parseJsonText,
-  postJson
+  postJson,
 }));
 
 const formatHeading = vi.fn();
@@ -58,13 +58,13 @@ const logPlain = vi.fn();
 vi.mock("../logger", () => ({
   formatHeading,
   logInfo,
-  logPlain
+  logPlain,
 }));
 
 const printResponse = vi.fn();
 
 vi.mock("../output", () => ({
-  printResponse
+  printResponse,
 }));
 
 const extractUserUuidFromCheckins = vi.fn();
@@ -72,7 +72,7 @@ const isTokenExpiredResponse = vi.fn();
 
 vi.mock("../responses", () => ({
   extractUserUuidFromCheckins,
-  isTokenExpiredResponse
+  isTokenExpiredResponse,
 }));
 
 const isLikelyLoginHtml = vi.fn();
@@ -80,7 +80,7 @@ const resolveTokenExpiry = vi.fn();
 
 vi.mock("../tokens", () => ({
   isLikelyLoginHtml,
-  resolveTokenExpiry
+  resolveTokenExpiry,
 }));
 
 const askHiddenQuestion = vi.fn();
@@ -90,7 +90,7 @@ const debugLog = vi.fn();
 vi.mock("../utils", () => ({
   askHiddenQuestion,
   askQuestion,
-  debugLog
+  debugLog,
 }));
 
 const buildWorkoutPlanIndex = vi.fn();
@@ -104,7 +104,7 @@ vi.mock("../workouts", () => ({
   extractWorkoutPlans,
   formatWorkoutSummary,
   mergeWorkoutPlans,
-  pickLatestWorkout
+  pickLatestWorkout,
 }));
 
 const captureWorkoutsFromBrowser = vi.fn();
@@ -112,19 +112,19 @@ const loginAndPersist = vi.fn();
 
 vi.mock("../auth", () => ({
   captureWorkoutsFromBrowser,
-  loginAndPersist
+  loginAndPersist,
 }));
 
 const renderWorkoutPage = vi.fn();
 
 vi.mock("../server/workout-view", () => ({
-  renderWorkoutPage
+  renderWorkoutPage,
 }));
 
 const printUsage = vi.fn();
 
 vi.mock("../usage", () => ({
-  printUsage
+  printUsage,
 }));
 
 const { handleWorkout } = await import("../commands/workout");
@@ -194,8 +194,6 @@ describe("handleWorkout", () => {
   });
 
   it("throws when program id is missing", async () => {
-    await expect(handleWorkout(["program"], {})).rejects.toThrow(
-      "Missing workout program id."
-    );
+    await expect(handleWorkout(["program"], {})).rejects.toThrow("Missing workout program id.");
   });
 });

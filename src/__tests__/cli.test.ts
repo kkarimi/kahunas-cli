@@ -15,7 +15,7 @@ describe("runCli", () => {
     const printUsage = vi.fn();
     const parseArgs = vi.fn().mockReturnValue({
       positionals: ["workout"],
-      options: { help: "true" }
+      options: { help: "true" },
     });
     const isFlagEnabled = vi.fn().mockReturnValue(true);
 
@@ -29,13 +29,13 @@ describe("runCli", () => {
     const handleCheckins = vi.fn().mockResolvedValue(undefined);
     const parseArgs = vi.fn().mockReturnValue({
       positionals: ["checkins", "list"],
-      options: { raw: "true" }
+      options: { raw: "true" },
     });
 
     await runCli(["checkins", "list", "--raw"], {
       parseArgs,
       isFlagEnabled: vi.fn().mockReturnValue(false),
-      handleCheckins
+      handleCheckins,
     });
 
     expect(handleCheckins).toHaveBeenCalledWith(["list"], { raw: "true" });
@@ -46,29 +46,32 @@ describe("runCli", () => {
     const parseArgs = vi
       .fn()
       .mockReturnValueOnce({ positionals: ["sync"], options: {} })
-      .mockReturnValueOnce({ positionals: ["serve", "--debug-preview"], options: { "debug-preview": "true" } });
+      .mockReturnValueOnce({
+        positionals: ["serve", "--debug-preview"],
+        options: { "debug-preview": "true" },
+      });
 
     await runCli(["sync"], { parseArgs, isFlagEnabled: vi.fn(), handleWorkout });
     await runCli(["serve", "--debug-preview"], {
       parseArgs,
       isFlagEnabled: vi.fn(),
-      handleWorkout
+      handleWorkout,
     });
 
     expect(handleWorkout).toHaveBeenCalledWith(["sync"], {});
     expect(handleWorkout).toHaveBeenCalledWith(["serve", "--debug-preview"], {
-      "debug-preview": "true"
+      "debug-preview": "true",
     });
   });
 
   it("throws on unknown commands", async () => {
     const parseArgs = vi.fn().mockReturnValue({
       positionals: ["nope"],
-      options: {}
+      options: {},
     });
 
-    await expect(
-      runCli(["nope"], { parseArgs, isFlagEnabled: vi.fn() })
-    ).rejects.toThrow("Unknown command: nope");
+    await expect(runCli(["nope"], { parseArgs, isFlagEnabled: vi.fn() })).rejects.toThrow(
+      "Unknown command: nope",
+    );
   });
 });

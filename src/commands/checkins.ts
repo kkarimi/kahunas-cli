@@ -8,7 +8,7 @@ import { printUsage } from "../usage";
 
 export async function handleCheckins(
   positionals: string[],
-  options: Record<string, string>
+  options: Record<string, string>,
 ): Promise<void> {
   const action = positionals[0];
   if (!action || action === "help") {
@@ -28,7 +28,7 @@ export async function handleCheckins(
       token = await loginAndPersist(options, config, "silent");
     } else {
       throw new Error(
-        "Missing auth token. Run 'kahunas workout sync' to refresh login, then try again."
+        "Missing auth token. Run 'kahunas workout sync' to refresh login, then try again.",
       );
     }
   }

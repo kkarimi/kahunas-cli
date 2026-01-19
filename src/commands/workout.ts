@@ -17,10 +17,15 @@ import {
   writeWorkoutCache,
   AUTH_PATH,
   CONFIG_PATH,
-  WORKOUT_CACHE_PATH
+  WORKOUT_CACHE_PATH,
 } from "../config";
 import { fetchCalendarEvents, resolveCalendarTimezone } from "../calendar";
-import { readCalendarCache, readProgramCaches, writeCalendarCache, writeProgramCache } from "../cache";
+import {
+  readCalendarCache,
+  readProgramCaches,
+  writeCalendarCache,
+  writeProgramCache,
+} from "../cache";
 import {
   filterWorkoutEvents,
   formatWorkoutEventsOutput,
@@ -30,7 +35,7 @@ import {
   resolveWorkoutEventDayIndex,
   sortWorkoutEvents,
   summarizeWorkoutProgramDays,
-  type WorkoutEvent
+  type WorkoutEvent,
 } from "../events";
 import { fetchWorkoutProgram, getWithAuth, postJson } from "../http";
 import { formatHeading, logInfo, logPlain } from "../logger";
@@ -44,7 +49,7 @@ import {
   formatWorkoutSummary,
   mergeWorkoutPlans,
   pickLatestWorkout,
-  type WorkoutPlan
+  type WorkoutPlan,
 } from "../workouts";
 import { captureWorkoutsFromBrowser, loginAndPersist } from "../auth";
 import { renderWorkoutPage } from "../server/workout-view";
@@ -53,7 +58,7 @@ import { formatHumanTimestamp, isIsoAfterNow } from "../datetime";
 
 export async function handleWorkout(
   positionals: string[],
-  options: Record<string, string>
+  options: Record<string, string>,
 ): Promise<void> {
   const action = positionals[0];
   if (!action || action === "help") {
@@ -71,7 +76,7 @@ export async function handleWorkout(
         token = await loginAndPersist(options, config, "silent");
       } else {
         throw new Error(
-          "Missing auth token. Run 'kahunas workout sync' to refresh login, then try again."
+          "Missing auth token. Run 'kahunas workout sync' to refresh login, then try again.",
         );
       }
     }
@@ -138,13 +143,13 @@ export async function handleWorkout(
         await ensureToken();
         let checkinsResponse = await postJson("/api/v2/checkin/list", token!, baseUrl, {
           page: 1,
-          rpp: 1
+          rpp: 1,
         });
         if (autoLogin && isTokenExpiredResponse(checkinsResponse.json)) {
           token = await loginAndPersist(options, config, "silent");
           checkinsResponse = await postJson("/api/v2/checkin/list", token, baseUrl, {
             page: 1,
-            rpp: 1
+            rpp: 1,
           });
         }
         if (checkinsResponse.ok) {
@@ -162,7 +167,7 @@ export async function handleWorkout(
     }
     if (!userUuid) {
       throw new Error(
-        "Missing user uuid. Run 'kahunas checkins list' or 'kahunas workout sync' once."
+        "Missing user uuid. Run 'kahunas checkins list' or 'kahunas workout sync' once.",
       );
     }
     if (userUuid !== config.userUuid) {
@@ -204,7 +209,7 @@ export async function handleWorkout(
         csrfToken: effectiveCsrfToken,
         cookieHeader,
         webBaseUrl: baseWebUrl,
-        timezone
+        timezone,
       });
       text = result.text;
       payload = result.payload;
@@ -230,7 +235,7 @@ export async function handleWorkout(
         csrfToken: effectiveCsrfToken,
         cookieHeader,
         webBaseUrl: baseWebUrl,
-        timezone
+        timezone,
       });
       text = retry.text;
       payload = retry.payload;
@@ -239,9 +244,7 @@ export async function handleWorkout(
     return { text, payload, timezone };
   };
 
-  const buildProgramDetails = async (
-    events: WorkoutEvent[]
-  ): Promise<Record<string, unknown>> => {
+  const buildProgramDetails = async (events: WorkoutEvent[]): Promise<Record<string, unknown>> => {
     let programIndex: Record<string, WorkoutPlan> | undefined;
     const cache = readWorkoutCache();
     let plans = cache?.plans ?? [];
@@ -282,8 +285,8 @@ export async function handleWorkout(
             const record = entry as Record<string, unknown>;
             return typeof record.program === "string" ? record.program : undefined;
           })
-          .filter((value): value is string => Boolean(value))
-      )
+          .filter((value): value is string => Boolean(value)),
+      ),
     );
 
     for (const programId of programIds) {
@@ -293,7 +296,7 @@ export async function handleWorkout(
           token!,
           baseUrl,
           programId,
-          effectiveCsrfToken
+          effectiveCsrfToken,
         );
         if (autoLogin && isTokenExpiredResponse(responseProgram.json)) {
           token = await loginAndPersist(options, config, "silent");
@@ -301,10 +304,14 @@ export async function handleWorkout(
             token,
             baseUrl,
             programId,
-            effectiveCsrfToken
+            effectiveCsrfToken,
           );
         }
-        if (responseProgram.ok && responseProgram.json && typeof responseProgram.json === "object") {
+        if (
+          responseProgram.ok &&
+          responseProgram.json &&
+          typeof responseProgram.json === "object"
+        ) {
           const programPayload = responseProgram.json as Record<string, unknown>;
           const data = programPayload.data;
           if (data && typeof data === "object") {
@@ -332,7 +339,9 @@ export async function handleWorkout(
     const limit = 30;
     const cacheTtlMs = 30_000;
 
-    const loadSummary = async (forceRefresh: boolean): Promise<{
+    const loadSummary = async (
+      forceRefresh: boolean,
+    ): Promise<{
       formatted: ReturnType<typeof formatWorkoutEventsOutput>;
       programDetails: Record<string, unknown>;
       timezone: string;
@@ -368,8 +377,8 @@ export async function handleWorkout(
               const record = entry as Record<string, unknown>;
               return typeof record.program === "string" ? record.program : undefined;
             })
-            .filter((value): value is string => Boolean(value))
-        )
+            .filter((value): value is string => Boolean(value)),
+        ),
       );
       const programDetails =
         cachedCalendar && !forceRefresh
@@ -386,7 +395,7 @@ export async function handleWorkout(
       const formatted = formatWorkoutEventsOutput(bounded, programDetails, {
         timezone,
         program: undefined,
-        workout: undefined
+        workout: undefined,
       });
       return { formatted, programDetails, timezone };
     };
@@ -400,7 +409,7 @@ export async function handleWorkout(
     let summaryInFlight: Promise<Awaited<ReturnType<typeof loadSummary>>> | null = null;
 
     const getSummary = async (
-      forceRefresh: boolean
+      forceRefresh: boolean,
     ): Promise<Awaited<ReturnType<typeof loadSummary>>> => {
       if (!forceRefresh && cached && Date.now() - cached.fetchedAt < cacheTtlMs) {
         return cached.data;
@@ -426,7 +435,7 @@ export async function handleWorkout(
           const data = await getSummary(wantsRefresh);
           const annotated = {
             ...data.formatted,
-            events: annotateWorkoutEventSummaries(data.formatted.events)
+            events: annotateWorkoutEventSummaries(data.formatted.events),
           };
           res.statusCode = 200;
           res.setHeader("content-type", "application/json; charset=utf-8");
@@ -454,7 +463,7 @@ export async function handleWorkout(
         const selectedSummary =
           (eventParam
             ? annotatedEvents.find(
-                (entry) => entry.event.id !== undefined && String(entry.event.id) === eventParam
+                (entry) => entry.event.id !== undefined && String(entry.event.id) === eventParam,
               )
             : undefined) ?? annotatedEvents[annotatedEvents.length - 1];
         const latestSummary = annotatedEvents[annotatedEvents.length - 1];
@@ -465,7 +474,7 @@ export async function handleWorkout(
           days,
           selectedSummary?.workout_day?.day_index,
           selectedSummary?.workout_day?.day_label,
-          dayParam
+          dayParam,
         );
         const html = renderWorkoutPage({
           summary: selectedSummary,
@@ -475,8 +484,7 @@ export async function handleWorkout(
           apiPath: "/api/workout",
           refreshPath: "/?refresh=1",
           isLatest: selectedSummary === latestSummary,
-          events: annotatedEvents,
-          selectedEventId: selectedSummary?.event.id
+          selectedEventId: selectedSummary?.event.id,
         });
         res.statusCode = 200;
         res.setHeader("content-type", "text/html; charset=utf-8");
@@ -502,6 +510,7 @@ export async function handleWorkout(
       logInfo(`Local workout server running at http://${host}:${port}`);
       logInfo(`JSON endpoint at http://${host}:${port}/api/workout`);
       logInfo(`Config: ${CONFIG_PATH}`);
+      logInfo(`Session cache: ${WORKOUT_CACHE_PATH}`);
       logInfo(`Last workout sync: ${lastSync}`);
       logInfo(`Token expiry: ${tokenExpiry}`);
       if (tokenExpiry === "unknown" && tokenUpdatedAt !== "unknown") {
@@ -514,7 +523,7 @@ export async function handleWorkout(
     days: ReturnType<typeof summarizeWorkoutProgramDays>,
     eventDayIndex: number | undefined,
     eventDayLabel: string | undefined,
-    dayParam: string | null
+    dayParam: string | null,
   ): number | undefined => {
     const parseOptionalInt = (value: string | null): number | undefined => {
       if (!value) {
@@ -538,7 +547,7 @@ export async function handleWorkout(
     if (eventDayLabel) {
       const normalized = normalize(eventDayLabel);
       const matchIndex = days.findIndex((day) =>
-        day.day_label ? normalize(day.day_label).includes(normalized) : false
+        day.day_label ? normalize(day.day_label).includes(normalized) : false,
       );
       if (matchIndex >= 0) {
         return matchIndex;
@@ -565,12 +574,12 @@ export async function handleWorkout(
         ? {
             updated_at: cache.updatedAt,
             count: cache.plans.length,
-            path: WORKOUT_CACHE_PATH
+            path: WORKOUT_CACHE_PATH,
           }
         : undefined,
       data: {
-        workout_plan: plans
-      }
+        workout_plan: plans,
+      },
     };
     console.log(JSON.stringify(output, null, 2));
     return;
@@ -692,7 +701,7 @@ export async function handleWorkout(
           true,
           `preview event=${eventId} program=${programUuid ?? "unknown"} day_index=${
             dayIndex ?? "none"
-          } source=${source}`
+          } source=${source}`,
         );
       }
     }
@@ -706,7 +715,7 @@ export async function handleWorkout(
     const formatted = formatWorkoutEventsOutput(limited, programDetails, {
       timezone,
       program: undefined,
-      workout: undefined
+      workout: undefined,
     });
     console.log(JSON.stringify(formatted, null, 2));
     return;
@@ -720,9 +729,7 @@ export async function handleWorkout(
   if (action === "sync") {
     const authConfig = readAuthConfig();
     const hasAuthConfig =
-      !!authConfig &&
-      !!authConfig.password &&
-      (!!authConfig.email || !!authConfig.username);
+      !!authConfig && !!authConfig.password && (!!authConfig.email || !!authConfig.username);
     const tokenUpdatedAt = config.tokenUpdatedAt ?? undefined;
     const tokenExpiry = token && tokenUpdatedAt ? resolveTokenExpiry(token, tokenUpdatedAt) : null;
     const hasValidToken = !!tokenExpiry && isIsoAfterNow(tokenExpiry);
@@ -731,7 +738,7 @@ export async function handleWorkout(
     if (!hasValidToken && !hasAuthConfig) {
       if (!process.stdin.isTTY) {
         throw new Error(
-          "Missing auth credentials. Create ~/.config/kahunas/auth.json or run 'kahunas sync' in a terminal."
+          "Missing auth credentials. Create ~/.config/kahunas/auth.json or run 'kahunas sync' in a terminal.",
         );
       }
       const login = await askQuestion("Email or username: ", process.stderr);
@@ -746,7 +753,7 @@ export async function handleWorkout(
       pendingAuth = {
         email: isEmail ? login : undefined,
         username: isEmail ? undefined : login,
-        password
+        password,
       };
     }
 
@@ -777,13 +784,13 @@ export async function handleWorkout(
       try {
         let checkinsResponse = await postJson("/api/v2/checkin/list", token, baseUrl, {
           page: 1,
-          rpp: 1
+          rpp: 1,
         });
         if (autoLogin && isTokenExpiredResponse(checkinsResponse.json)) {
           token = await loginAndPersist(options, config, "silent");
           checkinsResponse = await postJson("/api/v2/checkin/list", token, baseUrl, {
             page: 1,
-            rpp: 1
+            rpp: 1,
           });
         }
         if (checkinsResponse.ok) {
@@ -814,7 +821,7 @@ export async function handleWorkout(
             csrfToken,
             cookieHeader,
             webBaseUrl: resolveWebBaseUrl(options, nextConfig),
-            timezone: calendarTimezone
+            timezone: calendarTimezone,
           });
           writeCalendarCache(payload, { timezone, userUuid });
           if (Array.isArray(payload)) {
@@ -830,11 +837,11 @@ export async function handleWorkout(
             const formatted = formatWorkoutEventsOutput(sorted, programDetails, {
               timezone,
               program: undefined,
-              workout: undefined
+              workout: undefined,
             });
             const annotated = {
               ...formatted,
-              events: annotateWorkoutEventSummaries(formatted.events)
+              events: annotateWorkoutEventSummaries(formatted.events),
             };
             eventsCache = { updatedAt: new Date().toISOString(), ...annotated };
           }
@@ -845,21 +852,21 @@ export async function handleWorkout(
     }
 
     const cache = writeWorkoutCache(captured.plans, eventsCache);
-    console.log(
-      JSON.stringify(
-        {
-          message: "Workout programs synced",
-          cache: {
-            updated_at: cache.updatedAt,
-            count: cache.plans.length,
-            path: WORKOUT_CACHE_PATH,
-            data: cache
-          }
-        },
-        null,
-        2
-      )
-    );
+    const payload = {
+      message: "Workout programs synced",
+      cache: {
+        updated_at: cache.updatedAt,
+        count: cache.plans.length,
+        path: WORKOUT_CACHE_PATH,
+        data: cache,
+      },
+    };
+    const shouldEmitJson = rawOutput || !process.stdout.isTTY;
+    if (shouldEmitJson) {
+      console.log(JSON.stringify(payload, null, 2));
+    } else {
+      logPlain(formatSyncSummary(cache, eventsCache, WORKOUT_CACHE_PATH));
+    }
     const shouldLogCredentialStatus = process.stdout.isTTY && !rawOutput;
     if (pendingAuth && captured.token) {
       writeAuthConfig(pendingAuth);
@@ -900,4 +907,31 @@ export async function handleWorkout(
   }
 
   printResponse(responseProgram, rawOutput);
+}
+
+function formatSyncSummary(
+  cache: { plans: WorkoutPlan[] },
+  eventsCache: WorkoutEventsCache | null,
+  cachePath: string,
+): string {
+  const programCount = cache.plans.length;
+  const programLabel = programCount === 1 ? "program" : "programs";
+  let summary = `Synced ${programCount} ${programLabel}`;
+  const sessionCount = eventsCache?.events?.length;
+  if (sessionCount !== undefined) {
+    const sessionLabel = sessionCount === 1 ? "session" : "sessions";
+    summary += `, ${sessionCount} ${sessionLabel}`;
+    const latestStart = eventsCache?.events?.[sessionCount - 1]?.event?.start;
+    const latestDate = latestStart ? resolveDateLabel(latestStart) : undefined;
+    if (latestDate) {
+      summary += ` (latest ${latestDate})`;
+    }
+  }
+  summary += `. Stored at ${cachePath}.`;
+  return summary;
+}
+
+function resolveDateLabel(value: string): string | undefined {
+  const match = value.match(/^(\\d{4}-\\d{2}-\\d{2})/);
+  return match ? match[1] : undefined;
 }

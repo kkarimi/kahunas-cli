@@ -14,12 +14,12 @@ const fsMock = {
   writeFileSync: vi.fn((filePath: string, contents: string) => {
     files.set(filePath, contents);
   }),
-  mkdirSync: vi.fn()
+  mkdirSync: vi.fn(),
 };
 
 vi.mock("node:fs", () => fsMock);
 vi.mock("node:os", () => ({
-  homedir: () => "/home/tester"
+  homedir: () => "/home/tester",
 }));
 
 const configModule = await import("../config");
@@ -31,7 +31,7 @@ const {
   readConfig,
   validateAuthConfig,
   writeAuthConfig,
-  writeConfig
+  writeConfig,
 } = configModule;
 
 describe("config helpers", () => {
@@ -60,13 +60,13 @@ describe("config helpers", () => {
 
   it("requires username or email in auth config", () => {
     expect(() => validateAuthConfig({ password: "secret" })).toThrow(
-      `Invalid auth.json at ${AUTH_PATH}. Missing username or email.`
+      `Invalid auth.json at ${AUTH_PATH}. Missing username or email.`,
     );
   });
 
   it("requires password in auth config", () => {
     expect(() => validateAuthConfig({ username: "user" })).toThrow(
-      `Invalid auth.json at ${AUTH_PATH}. Missing password.`
+      `Invalid auth.json at ${AUTH_PATH}. Missing password.`,
     );
   });
 
@@ -76,6 +76,8 @@ describe("config helpers", () => {
 
     expect(fsMock.mkdirSync).toHaveBeenCalledTimes(2);
     expect(files.get(CONFIG_PATH)).toBe(`{\n  \"token\": \"t1\"\n}\n`);
-    expect(files.get(AUTH_PATH)).toBe(`{\n  \"email\": \"user@example.com\",\n  \"password\": \"secret\"\n}\n`);
+    expect(files.get(AUTH_PATH)).toBe(
+      `{\n  \"email\": \"user@example.com\",\n  \"password\": \"secret\"\n}\n`,
+    );
   });
 });

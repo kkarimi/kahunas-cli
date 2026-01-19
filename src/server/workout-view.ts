@@ -1,8 +1,4 @@
-import type {
-  WorkoutDaySummary,
-  WorkoutEventSummary,
-  WorkoutExerciseSummary
-} from "../events";
+import type { WorkoutDaySummary, WorkoutExerciseSummary } from "../events";
 
 type RenderWorkoutPageOptions = {
   summary?: WorkoutEventSummary;
@@ -12,7 +8,6 @@ type RenderWorkoutPageOptions = {
   apiPath: string;
   refreshPath: string;
   isLatest?: boolean;
-  events?: WorkoutEventSummary[];
   selectedEventId?: string | number;
 };
 
@@ -25,8 +20,7 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
     apiPath,
     refreshPath,
     isLatest,
-    events,
-    selectedEventId
+    selectedEventId,
   } = options;
   const eventTitle = summary?.event.title ?? "Workout";
   const eventStart = summary?.event.start ?? "";
@@ -36,7 +30,7 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
   const selected =
     selectedDayIndex !== undefined && days[selectedDayIndex]
       ? days[selectedDayIndex]
-      : summary?.workout_day ?? null;
+      : (summary?.workout_day ?? null);
 
   const tabs =
     days.length > 0
@@ -56,32 +50,6 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
         </div>`
       : "";
 
-  const eventList =
-    events && events.length > 0
-      ? `
-        <section class="section">
-          <h2>Recent Sessions</h2>
-          <div class="event-list">
-            ${events
-              .slice()
-              .reverse()
-              .map((entry) => {
-                const id = entry.event.id;
-                const isActive = id !== undefined && String(id) === String(selectedEventId);
-                const title = escapeHtml(entry.event.title ?? "Workout");
-                const date = resolvePerformedOnLabel(entry.event.start ?? "") ?? "Unknown date";
-                const link = id !== undefined ? `/?event=${encodeURIComponent(String(id))}` : "/";
-                return `<a class="event-card ${isActive ? "active" : ""}" href="${link}">
-                  <span class="event-date">${escapeHtml(date)}</span>
-                  <span class="event-title">${title}</span>
-                </a>`;
-              })
-              .join("")}
-          </div>
-        </section>
-      `
-      : "";
-
   const totalVolumeSets = selected?.total_volume_sets ?? [];
   const totalVolumeSection =
     totalVolumeSets.length > 0
@@ -92,7 +60,7 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
             ${totalVolumeSets
               .map(
                 (entry) =>
-                  `<span class="chip">${escapeHtml(entry.body_part)} ${formatNumber(entry.sets)}</span>`
+                  `<span class="chip">${escapeHtml(entry.body_part)} ${formatNumber(entry.sets)}</span>`,
               )
               .join("")}
           </div>
@@ -106,12 +74,10 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
           const groups = section.groups
             .map((group, groupIndex) => {
               const groupLabel =
-                group.type === "superset"
-                  ? `<div class="group-label">Superset</div>`
-                  : "";
+                group.type === "superset" ? `<div class="group-label">Superset</div>` : "";
               const rows = group.exercises
                 .map((exercise, rowIndex) =>
-                  renderExerciseRow(exercise, groupIndex + rowIndex, performedOn)
+                  renderExerciseRow(exercise, groupIndex + rowIndex, performedOn),
                 )
                 .join("");
               return `<div class="group">${groupLabel}${rows}</div>`;
@@ -271,38 +237,6 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
         color: var(--accent);
         border-color: var(--accent);
         background: #f2fbf8;
-      }
-
-      .event-list {
-        display: grid;
-        gap: 10px;
-      }
-
-      .event-card {
-        display: grid;
-        gap: 4px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        border: 1px solid var(--line);
-        background: #f9fbff;
-        text-decoration: none;
-        color: var(--ink);
-      }
-
-      .event-card.active {
-        border-color: var(--accent);
-        background: #f2fbf8;
-      }
-
-      .event-date {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--accent);
-      }
-
-      .event-title {
-        font-size: 14px;
-        font-weight: 600;
       }
 
       .section {
@@ -472,7 +406,6 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
       </header>
 
       ${totalVolumeSection}
-      ${eventList}
       ${sections}
     </div>
   </body>
@@ -482,17 +415,17 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
 function renderExerciseRow(
   exercise: WorkoutExerciseSummary,
   index: number,
-  performedOn?: string
+  performedOn?: string,
 ): string {
   const badge = escapeHtml(resolveOrderLabel(exercise, index));
   const dateLabel = resolvePerformedOnLabel(
-    exercise.performed_on ?? exercise.performed_at ?? performedOn
+    exercise.performed_on ?? exercise.performed_at ?? performedOn,
   );
   const metrics = [
     exercise.sets !== undefined ? `Sets ${exercise.sets}` : null,
     exercise.reps ? `Reps ${escapeHtml(exercise.reps)}` : null,
     exercise.rest_seconds !== undefined ? `Rest ${formatDuration(exercise.rest_seconds)}` : null,
-    exercise.time_seconds !== undefined ? `Time ${formatDuration(exercise.time_seconds)}` : null
+    exercise.time_seconds !== undefined ? `Time ${formatDuration(exercise.time_seconds)}` : null,
   ]
     .filter(Boolean)
     .join(" | ");
@@ -517,8 +450,9 @@ function renderExerciseRow(
 function formatBodyParts(parts: Array<{ name: string; volume?: number }>): string {
   return parts
     .slice(0, 3)
-    .map((part) =>
-      `${escapeHtml(part.name)}${part.volume !== undefined ? ` ${formatNumber(part.volume)}` : ""}`
+    .map(
+      (part) =>
+        `${escapeHtml(part.name)}${part.volume !== undefined ? ` ${formatNumber(part.volume)}` : ""}`,
     )
     .join("<br />");
 }
