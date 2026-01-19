@@ -5,11 +5,28 @@ import { handleWorkout } from "./commands/workout";
 import { logError } from "./logger";
 import { printUsage } from "./usage";
 
-async function main(): Promise<void> {
-  const { positionals, options } = parseArgs(process.argv.slice(2));
+type RunCliDeps = {
+  parseArgs?: typeof parseArgs;
+  isFlagEnabled?: typeof isFlagEnabled;
+  handleCheckins?: typeof handleCheckins;
+  handleWorkout?: typeof handleWorkout;
+  printUsage?: typeof printUsage;
+  logError?: typeof logError;
+};
 
-  if (positionals.length === 0 || isFlagEnabled(options, "help")) {
-    printUsage();
+export async function runCli(argv: string[], deps: RunCliDeps = {}): Promise<void> {
+  const {
+    parseArgs: parseArgsImpl = parseArgs,
+    isFlagEnabled: isFlagEnabledImpl = isFlagEnabled,
+    handleCheckins: handleCheckinsImpl = handleCheckins,
+    handleWorkout: handleWorkoutImpl = handleWorkout,
+    printUsage: printUsageImpl = printUsage
+  } = deps;
+
+  const { positionals, options } = parseArgsImpl(argv);
+
+  if (positionals.length === 0 || isFlagEnabledImpl(options, "help")) {
+    printUsageImpl();
     return;
   }
 
@@ -18,27 +35,33 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "checkins":
-      await handleCheckins(rest, options);
+      await handleCheckinsImpl(rest, options);
       return;
     case "sync":
-      await handleWorkout(["sync", ...rest], options);
+      await handleWorkoutImpl(["sync", ...rest], options);
       return;
     case "serve":
-      await handleWorkout(["serve", ...rest], options);
+      await handleWorkoutImpl(["serve", ...rest], options);
       return;
     case "workout":
-      await handleWorkout(rest, options);
+      await handleWorkoutImpl(rest, options);
       return;
     case "help":
-      printUsage();
+      printUsageImpl();
       return;
     default:
       throw new Error(`Unknown command: ${command}`);
   }
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  logError(message);
-  process.exit(1);
-});
+async function main(): Promise<void> {
+  await runCli(process.argv.slice(2));
+}
+
+if (typeof require !== "undefined" && typeof module !== "undefined" && require.main === module) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logError(message);
+    process.exit(1);
+  });
+}

@@ -10,10 +10,10 @@ export default defineConfig({
       reportsDirectory: "coverage",
       include: ["src/**/*.ts"],
       exclude: ["src/__tests__/**", "dist/**"],
-      lines: 38,
+      lines: 58,
       branches: 64,
-      functions: 67,
-      statements: 38
+      functions: 64,
+      statements: 58
     }
   }
 });
