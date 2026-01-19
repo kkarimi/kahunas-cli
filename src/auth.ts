@@ -252,6 +252,11 @@ async function clickWorkoutNav(page: Page, debug: boolean): Promise<boolean> {
   }
 }
 
+const importPlaywright: (moduleId: string) => Promise<typeof import("playwright")> = new Function(
+  "m",
+  "return import(m)",
+) as (moduleId: string) => Promise<typeof import("playwright")>;
+
 async function triggerWorkoutCapture(
   page: Page,
   webOrigin: string,
@@ -286,7 +291,7 @@ export async function captureWorkoutsFromBrowser(
   const debug = config.debug === true;
   const storedAuth = resolveStoredAuth(authOverride);
 
-  const playwright = await import("playwright");
+  const playwright = await importPlaywright("playwright");
   const browser = await playwright.chromium.launch({ headless });
   const context = await browser.newContext();
   const plans: WorkoutPlan[] = [];
@@ -402,7 +407,7 @@ export async function loginWithBrowser(
   const debug = config.debug === true;
   const storedAuth = resolveStoredAuth();
 
-  const playwright = await import("playwright");
+  const playwright = await importPlaywright("playwright");
   const browser = await playwright.chromium.launch({ headless });
   const context = await browser.newContext();
   let observedToken: string | undefined;

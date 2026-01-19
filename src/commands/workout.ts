@@ -452,6 +452,7 @@ export async function handleWorkout(
       const programUuid = selectedSummary?.program?.uuid;
       const program = programUuid ? data.programDetails[programUuid] : undefined;
       const days = summarizeWorkoutProgramDays(program);
+      const dayDateMap = buildDayDateMap(annotatedEvents);
       const selectedDayIndex = resolveSelectedDayIndex(
         days,
         selectedSummary?.workout_day?.day_index,
@@ -461,6 +462,7 @@ export async function handleWorkout(
       return {
         summary: selectedSummary,
         days,
+        dayDateMap,
         selectedDayIndex,
         timezone: data.timezone,
         apiPath: "/api/workout",
@@ -562,6 +564,56 @@ export async function handleWorkout(
     });
   };
 
+  const buildDayDateMap = (
+    events: ReturnType<typeof annotateWorkoutEventSummaries>,
+  ): Record<string, string> => {
+    const map: Record<string, { time: number; label: string }> = {};
+    for (const entry of events) {
+      const day = entry.workout_day;
+      const dayIndex = day?.day_index;
+      if (dayIndex === undefined || !day?.sections?.length) {
+        continue;
+      }
+      const latest = getLatestExerciseDateForDay(day);
+      if (!latest) {
+        continue;
+      }
+      const current = map[String(dayIndex)];
+      if (!current || latest.time > current.time) {
+        map[String(dayIndex)] = latest;
+      }
+    }
+    const output: Record<string, string> = {};
+    for (const [key, value] of Object.entries(map)) {
+      output[key] = value.label;
+    }
+    return output;
+  };
+
+  const getLatestExerciseDateForDay = (
+    day: NonNullable<ReturnType<typeof annotateWorkoutEventSummaries>[number]["workout_day"]>,
+  ): { time: number; label: string } | null => {
+    let latest: { time: number; label: string } | null = null;
+    for (const section of day.sections) {
+      for (const group of section.groups) {
+        for (const exercise of group.exercises) {
+          const label = exercise.performed_on ?? exercise.performed_at;
+          if (!label) {
+            continue;
+          }
+          const parsed = Date.parse(label);
+          if (!Number.isFinite(parsed)) {
+            continue;
+          }
+          if (!latest || parsed > latest.time) {
+            latest = { time: parsed, label };
+          }
+        }
+      }
+    }
+    return latest;
+  };
+
   const resolveSelectedDayIndex = (
     days: ReturnType<typeof summarizeWorkoutProgramDays>,
     eventDayIndex: number | undefined,
@@ -575,6 +627,7 @@ export async function handleWorkout(
       const parsed = Number.parseInt(value, 10);
       return Number.isFinite(parsed) ? parsed : undefined;
     };
+
     const normalize = (value: string): string => value.trim().toLowerCase();
 
     const paramIndex = parseOptionalInt(dayParam);

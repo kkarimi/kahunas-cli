@@ -20,7 +20,7 @@
   ],
   "main": "dist/cli.js",
   "scripts": {
-    "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --inlineDynamicImports --external playwright --external vite --external vite-plugin-solid --external fsevents --tsconfig tsconfig.json",
+    "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --inlineDynamicImports --external playwright --external playwright-core --external vite --external vite-plugin-solid --external fsevents --tsconfig tsconfig.json",
     "kahunas": "node dist/cli.js",
     "lint": "pnpm typecheck",
     "lint:fmt": "pnpm lint:fix",

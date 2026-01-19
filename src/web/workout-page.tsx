@@ -22,9 +22,15 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
 
   const selectedDayLabel = createMemo(() => selected()?.day_label);
   const latestSelected = createMemo(() => getLatestExerciseDateFromDay(selected()));
-  const latestProgram = createMemo(() => getLatestExerciseDateFromDays(props.days));
+  const selectedDayDate = createMemo(() => {
+    const index = selectedDayIndex();
+    if (index === undefined) {
+      return undefined;
+    }
+    return props.dayDateMap?.[String(index)];
+  });
   const headerDate = createMemo(() =>
-    resolvePerformedOnLabel(latestSelected() ?? latestProgram() ?? eventStart),
+    resolvePerformedOnLabel(selectedDayDate() ?? latestSelected() ?? eventStart),
   );
   const headerSubtitle = createMemo(() => {
     const dayLabel = selectedDayLabel();
@@ -248,24 +254,6 @@ function resolvePerformedOnLabel(value: string | undefined): string | undefined 
   }
   const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : value;
-}
-
-function getLatestExerciseDateFromDays(days: WorkoutDaySummary[]): string | undefined {
-  let latest: { time: number; label: string } | undefined;
-  for (const day of days) {
-    const candidate = getLatestExerciseDateFromDay(day);
-    if (!candidate) {
-      continue;
-    }
-    const parsed = Date.parse(candidate);
-    if (!Number.isFinite(parsed)) {
-      continue;
-    }
-    if (!latest || parsed > latest.time) {
-      latest = { time: parsed, label: candidate };
-    }
-  }
-  return latest?.label;
 }
 
 function getLatestExerciseDateFromDay(
