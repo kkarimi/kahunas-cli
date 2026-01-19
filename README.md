@@ -31,6 +31,20 @@ Open `http://127.0.0.1:3000`.
 
 If `auth.json` is missing, `sync` will prompt for credentials and save them after a successful login.
 
+## Testing
+
+Run the test suite:
+
+```bash
+pnpm test
+```
+
+Generate coverage reports (CI enforces coverage thresholds):
+
+```bash
+pnpm test:coverage
+```
+
 ## Advanced usage
 
 See `docs/advanced.md` for all commands, flags, and configuration options.

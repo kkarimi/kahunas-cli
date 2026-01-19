@@ -30,7 +30,7 @@ jobs:
       - name: Build
         run: pnpm build
       - name: Test
-        run: pnpm test
+        run: pnpm test:coverage
 
   release:
     if: github.event_name == 'workflow_dispatch'
@@ -54,7 +54,7 @@ jobs:
       - name: Build
         run: pnpm build
       - name: Test
-        run: pnpm test
+        run: pnpm test:coverage
       - name: Publish
         if: inputs.publish
         run: pnpm publish --access public
