@@ -28,12 +28,15 @@ export type WorkoutExerciseGroup = {
 export type WorkoutExerciseSummary = {
   name: string;
   uuid?: string;
+  order?: number;
   sets?: number;
   reps?: string;
   rest_seconds?: number;
   time_seconds?: number;
   notes?: string;
   sequence?: string;
+  performed_at?: string;
+  performed_on?: string;
   body_parts?: { name: string; volume?: number }[];
   media?: { file_url?: string; thumbnail_url?: string; file_type?: number }[];
 };
@@ -241,6 +244,46 @@ function formatWorkoutEvent(
     workout_day: workoutDay
   };
 }
+
+export function annotateWorkoutEventSummaries(
+  events: WorkoutEventSummary[]
+): WorkoutEventSummary[] {
+  return events.map((event) => {
+    if (!event.workout_day) {
+      return event;
+    }
+    const performedAt = event.event.start;
+    const performedOn = resolvePerformedOn(performedAt);
+    let order = 1;
+    const sections = event.workout_day.sections.map((section) => ({
+      ...section,
+      groups: section.groups.map((group) => ({
+        ...group,
+        exercises: group.exercises.map((exercise) => {
+          const derivedOrder = parseSequence(exercise.sequence) ?? order;
+          const next = {
+            ...exercise,
+            order: derivedOrder,
+            performed_at: performedAt ?? exercise.performed_at,
+            performed_on: performedOn ?? exercise.performed_on
+          };
+          order += 1;
+          return next;
+        })
+      }))
+    }));
+    return { ...event, workout_day: { ...event.workout_day, sections } };
+  });
+}
+
+function resolvePerformedOn(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : value;
+}
+
 
 function deriveWorkoutDayFromProgram(
   program: unknown,

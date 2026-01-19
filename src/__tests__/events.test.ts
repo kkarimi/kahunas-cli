@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  annotateWorkoutEventSummaries,
   enrichWorkoutEvents,
   filterWorkoutEvents,
   formatWorkoutEventsOutput,
@@ -128,12 +129,45 @@ describe("formatWorkoutEventsOutput", () => {
         }
       ]
     };
-    const events = [{ id: 1, title: "Day 2: Posterior", program: "p1" }];
+    const events = [{ id: 1, title: "Day 2: Posterior", program: "p1", start: "2025-01-02" }];
     const output = formatWorkoutEventsOutput(events, { p1: program }, { timezone: "UTC" });
     const exercise = output.events[0].workout_day?.sections[0].groups[0].exercises[0];
     expect(exercise?.name).toBe("Deadlift");
     expect(exercise?.sets).toBe(3);
     expect(exercise?.reps).toBe("3-5reps");
+  });
+
+  it("annotates exercise order and performed dates for cache/UI output", () => {
+    const events = [
+      {
+        event: { start: "2025-02-03 07:30:00" },
+        program: null,
+        workout_day: {
+          total_volume_sets: [],
+          sections: [
+            {
+              type: "workout",
+              label: "Workout",
+              groups: [
+                {
+                  type: "straight",
+                  exercises: [
+                    { name: "Squat", sequence: "1" },
+                    { name: "Row", sequence: "2" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ];
+    const annotated = annotateWorkoutEventSummaries(events);
+    const exercises = annotated[0].workout_day?.sections[0].groups[0].exercises ?? [];
+    expect(exercises[0]?.order).toBe(1);
+    expect(exercises[0]?.performed_on).toBe("2025-02-03");
+    expect(exercises[0]?.performed_at).toBe("2025-02-03 07:30:00");
+    expect(exercises[1]?.order).toBe(2);
   });
 
   it("handles exercise_list sections with warmup and supersets", () => {

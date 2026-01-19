@@ -32,6 +32,12 @@ vi.mock("../config", () => ({
   resolveWebBaseUrl
 }));
 
+const postJson = vi.fn();
+
+vi.mock("../http", () => ({
+  postJson
+}));
+
 const captureWorkoutsFromBrowser = vi.fn();
 
 vi.mock("../auth", () => ({
@@ -68,7 +74,12 @@ describe("workout sync flow", () => {
     resolveToken.mockReturnValue(undefined);
     resolveBaseUrl.mockReturnValue("https://api.kahunas.io");
     resolveWebBaseUrl.mockReturnValue("https://kahunas.io");
-    writeWorkoutCache.mockReturnValue({ updatedAt: "2026-01-01T00:00:00.000Z", plans: [] });
+    resolveUserUuid.mockReturnValue("user-uuid");
+    writeWorkoutCache.mockReturnValue({
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      plans: [],
+      events: null
+    });
   });
 
   afterEach(() => {
@@ -98,7 +109,12 @@ describe("workout sync flow", () => {
       cache: {
         updated_at: "2026-01-01T00:00:00.000Z",
         count: 0,
-        path: "/tmp/kahunas/workouts.json"
+        path: "/tmp/kahunas/workouts.json",
+        data: {
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          plans: [],
+          events: null
+        }
       }
     });
     expect(errorSpy).toHaveBeenCalledWith("Saved credentials to /tmp/kahunas/auth.json");
@@ -135,7 +151,12 @@ describe("workout sync flow", () => {
       cache: {
         updated_at: "2026-01-01T00:00:00.000Z",
         count: 0,
-        path: "/tmp/kahunas/workouts.json"
+        path: "/tmp/kahunas/workouts.json",
+        data: {
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          plans: [],
+          events: null
+        }
       }
     });
     expect(writeAuthConfig).not.toHaveBeenCalled();

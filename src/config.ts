@@ -13,6 +13,7 @@ import {
   trim,
   type InferOutput
 } from "valibot";
+import type { WorkoutEventSummary } from "./events";
 import type { WorkoutPlan } from "./workouts";
 
 const DEFAULT_BASE_URL = "https://api.kahunas.io";
@@ -26,6 +27,7 @@ export const WORKOUT_CACHE_PATH = path.join(
   "kahunas",
   "workouts.json"
 );
+export const CACHE_DIR_PATH = path.join(os.homedir(), ".config", "kahunas", "cache");
 
 export type Config = {
   token?: string;
@@ -63,6 +65,15 @@ export type ValidAuthConfig = InferOutput<typeof AuthConfigSchema>;
 export type WorkoutCache = {
   updatedAt: string;
   plans: WorkoutPlan[];
+  events?: WorkoutEventsCache | null;
+};
+
+export type WorkoutEventsCache = {
+  updatedAt: string;
+  timezone: string;
+  source: "calendar";
+  filters: { program: string | null; workout: string | null };
+  events: WorkoutEventSummary[];
 };
 
 export function readConfig(): Config {
@@ -144,10 +155,13 @@ export function readWorkoutCache(): WorkoutCache | undefined {
   }
 }
 
-export function writeWorkoutCache(plans: WorkoutPlan[]): WorkoutCache {
+export function writeWorkoutCache(
+  plans: WorkoutPlan[],
+  events?: WorkoutEventsCache | null
+): WorkoutCache {
   const dir = path.dirname(WORKOUT_CACHE_PATH);
   fs.mkdirSync(dir, { recursive: true });
-  const cache: WorkoutCache = { updatedAt: new Date().toISOString(), plans };
+  const cache: WorkoutCache = { updatedAt: new Date().toISOString(), plans, events };
   fs.writeFileSync(WORKOUT_CACHE_PATH, `${JSON.stringify(cache, null, 2)}\n`, "utf-8");
   return cache;
 }

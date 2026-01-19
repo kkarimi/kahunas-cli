@@ -12,12 +12,25 @@ type RenderWorkoutPageOptions = {
   apiPath: string;
   refreshPath: string;
   isLatest?: boolean;
+  events?: WorkoutEventSummary[];
+  selectedEventId?: string | number;
 };
 
 export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
-  const { summary, days, selectedDayIndex, timezone, apiPath, refreshPath, isLatest } = options;
+  const {
+    summary,
+    days,
+    selectedDayIndex,
+    timezone,
+    apiPath,
+    refreshPath,
+    isLatest,
+    events,
+    selectedEventId
+  } = options;
   const eventTitle = summary?.event.title ?? "Workout";
   const eventStart = summary?.event.start ?? "";
+  const performedOn = resolvePerformedOnLabel(eventStart);
   const programTitle = summary?.program?.title ?? "Program";
 
   const selected =
@@ -25,15 +38,49 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
       ? days[selectedDayIndex]
       : summary?.workout_day ?? null;
 
-  const tabs = days.length > 0
-    ? `<nav class="tabs">${days
-        .map((day, index) => {
-          const label = escapeHtml(day.day_label ?? `Day ${index + 1}`);
-          const active = index === selectedDayIndex ? "active" : "";
-          return `<a class="tab ${active}" href="/?day=${index}">${label}</a>`;
-        })
-        .join("")}</nav>`
-    : "";
+  const tabs =
+    days.length > 0
+      ? `<div class="tabs-block">
+          <div class="tabs-label">Program days</div>
+          <nav class="tabs">${days
+            .map((day, index) => {
+              const label = escapeHtml(day.day_label ?? `Day ${index + 1}`);
+              const active = index === selectedDayIndex ? "active" : "";
+              const eventParam =
+                selectedEventId !== undefined
+                  ? `&event=${encodeURIComponent(String(selectedEventId))}`
+                  : "";
+              return `<a class="tab ${active}" href="/?day=${index}${eventParam}">${label}</a>`;
+            })
+            .join("")}</nav>
+        </div>`
+      : "";
+
+  const eventList =
+    events && events.length > 0
+      ? `
+        <section class="section">
+          <h2>Recent Sessions</h2>
+          <div class="event-list">
+            ${events
+              .slice()
+              .reverse()
+              .map((entry) => {
+                const id = entry.event.id;
+                const isActive = id !== undefined && String(id) === String(selectedEventId);
+                const title = escapeHtml(entry.event.title ?? "Workout");
+                const date = resolvePerformedOnLabel(entry.event.start ?? "") ?? "Unknown date";
+                const link = id !== undefined ? `/?event=${encodeURIComponent(String(id))}` : "/";
+                return `<a class="event-card ${isActive ? "active" : ""}" href="${link}">
+                  <span class="event-date">${escapeHtml(date)}</span>
+                  <span class="event-title">${title}</span>
+                </a>`;
+              })
+              .join("")}
+          </div>
+        </section>
+      `
+      : "";
 
   const totalVolumeSets = selected?.total_volume_sets ?? [];
   const totalVolumeSection =
@@ -64,7 +111,7 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
                   : "";
               const rows = group.exercises
                 .map((exercise, rowIndex) =>
-                  renderExerciseRow(exercise, groupIndex + rowIndex)
+                  renderExerciseRow(exercise, groupIndex + rowIndex, performedOn)
                 )
                 .join("");
               return `<div class="group">${groupLabel}${rows}</div>`;
@@ -196,6 +243,20 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
         padding: 18px 0 4px;
       }
 
+      .tabs-block {
+        display: grid;
+        gap: 8px;
+        padding-top: 12px;
+      }
+
+      .tabs-label {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
       .tab {
         padding: 8px 14px;
         border-radius: 999px;
@@ -210,6 +271,38 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
         color: var(--accent);
         border-color: var(--accent);
         background: #f2fbf8;
+      }
+
+      .event-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .event-card {
+        display: grid;
+        gap: 4px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #f9fbff;
+        text-decoration: none;
+        color: var(--ink);
+      }
+
+      .event-card.active {
+        border-color: var(--accent);
+        background: #f2fbf8;
+      }
+
+      .event-date {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      .event-title {
+        font-size: 14px;
+        font-weight: 600;
       }
 
       .section {
@@ -259,11 +352,25 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
         height: 46px;
         border-radius: 14px;
         background: var(--chip);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: grid;
+        place-items: center;
+        gap: 2px;
         font-weight: 700;
         color: #275b8b;
+        text-align: center;
+        font-size: 14px;
+      }
+
+      .badge span {
+        display: block;
+        line-height: 1;
+      }
+
+      .badge-label {
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.7;
       }
 
       .exercise h3 {
@@ -279,13 +386,25 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
       }
 
       .metrics {
-        display: flex;
-        flex-direction: column;
+        display: grid;
         gap: 6px;
         font-size: 13px;
         color: var(--muted);
         min-width: 140px;
         text-align: right;
+        justify-items: end;
+      }
+
+      .date-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--chip);
+        color: #1c3b57;
+        font-weight: 600;
+        font-size: 11px;
       }
 
       .chips {
@@ -353,14 +472,22 @@ export function renderWorkoutPage(options: RenderWorkoutPageOptions): string {
       </header>
 
       ${totalVolumeSection}
+      ${eventList}
       ${sections}
     </div>
   </body>
 </html>`;
 }
 
-function renderExerciseRow(exercise: WorkoutExerciseSummary, index: number): string {
-  const badge = escapeHtml(exercise.sequence ?? String(index + 1));
+function renderExerciseRow(
+  exercise: WorkoutExerciseSummary,
+  index: number,
+  performedOn?: string
+): string {
+  const badge = escapeHtml(resolveOrderLabel(exercise, index));
+  const dateLabel = resolvePerformedOnLabel(
+    exercise.performed_on ?? exercise.performed_at ?? performedOn
+  );
   const metrics = [
     exercise.sets !== undefined ? `Sets ${exercise.sets}` : null,
     exercise.reps ? `Reps ${escapeHtml(exercise.reps)}` : null,
@@ -371,12 +498,16 @@ function renderExerciseRow(exercise: WorkoutExerciseSummary, index: number): str
     .join(" | ");
   return `
     <div class="exercise" style="--delay: ${Math.min(index * 0.04, 0.4)}s">
-      <div class="badge">${badge}</div>
+      <div class="badge">
+        <span>${badge}</span>
+        <span class="badge-label">Order</span>
+      </div>
       <div>
         <h3>${escapeHtml(exercise.name)}</h3>
         <p>${metrics || "No prescription"}</p>
       </div>
       <div class="metrics">
+        ${dateLabel ? `<span class="date-pill">${escapeHtml(dateLabel)}</span>` : ""}
         ${exercise.body_parts?.length ? formatBodyParts(exercise.body_parts) : ""}
       </div>
     </div>
@@ -407,6 +538,24 @@ function formatNumber(value: number): string {
     return String(value);
   }
   return value.toFixed(1).replace(/\.0$/, "");
+}
+
+function resolveOrderLabel(exercise: WorkoutExerciseSummary, index: number): string {
+  if (exercise.order !== undefined && Number.isFinite(exercise.order)) {
+    return String(exercise.order);
+  }
+  if (exercise.sequence) {
+    return exercise.sequence;
+  }
+  return String(index + 1);
+}
+
+function resolvePerformedOnLabel(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const match = value.match(/^(\\d{4}-\\d{2}-\\d{2})/);
+  return match ? match[1] : value;
 }
 
 function escapeHtml(value: string): string {
