@@ -32,6 +32,7 @@ Open `http://127.0.0.1:3000`.
 If `auth.json` is missing, `sync` will prompt for credentials and save them after a successful login.
 After syncing, the CLI prints the cache JSON written to `~/.config/kahunas/workouts.json`, including calendar events with per-exercise date labels.
 Raw Kahunas payloads are cached under `~/.config/kahunas/cache` for offline preview.
+The preview UI is served by a local Vite dev server using Solid, so it requires JavaScript in the browser.
 
 ## Testing
 

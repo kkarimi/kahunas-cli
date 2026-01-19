@@ -16,6 +16,7 @@ const resolveWebBaseUrl = vi.fn();
 vi.mock("../config", () => ({
   AUTH_PATH: "/tmp/kahunas/auth.json",
   CONFIG_PATH: "/tmp/kahunas/config.json",
+  CACHE_DIR_PATH: "/tmp/kahunas/cache",
   WORKOUT_CACHE_PATH: "/tmp/kahunas/workouts.json",
   readConfig,
   readAuthConfig,

@@ -1,4 +1,7 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { isFlagEnabled } from "../args";
 import type { AuthConfig, WorkoutEventsCache } from "../config";
 import {
@@ -52,7 +55,7 @@ import {
   type WorkoutPlan,
 } from "../workouts";
 import { captureWorkoutsFromBrowser, loginAndPersist } from "../auth";
-import { renderWorkoutPage } from "../server/workout-view";
+import type { WorkoutPageData } from "../web/types";
 import { printUsage } from "../usage";
 import { formatHumanTimestamp, isIsoAfterNow } from "../datetime";
 
@@ -426,6 +429,66 @@ export async function handleWorkout(
       return data;
     };
 
+    const resolveWebRoot = (): string => {
+      const distRoot = path.join(__dirname, "web");
+      if (existsSync(distRoot)) {
+        return distRoot;
+      }
+      return path.join(__dirname, "..", "src", "web");
+    };
+
+    const buildPageData = async (url: URL, wantsRefresh: boolean): Promise<WorkoutPageData> => {
+      const data = await getSummary(wantsRefresh);
+      const dayParam = url.searchParams.get("day");
+      const eventParam = url.searchParams.get("event");
+      const annotatedEvents = annotateWorkoutEventSummaries(data.formatted.events);
+      const selectedSummary =
+        (eventParam
+          ? annotatedEvents.find(
+              (entry) => entry.event.id !== undefined && String(entry.event.id) === eventParam,
+            )
+          : undefined) ?? annotatedEvents[annotatedEvents.length - 1];
+      const latestSummary = annotatedEvents[annotatedEvents.length - 1];
+      const programUuid = selectedSummary?.program?.uuid;
+      const program = programUuid ? data.programDetails[programUuid] : undefined;
+      const days = summarizeWorkoutProgramDays(program);
+      const selectedDayIndex = resolveSelectedDayIndex(
+        days,
+        selectedSummary?.workout_day?.day_index,
+        selectedSummary?.workout_day?.day_label,
+        dayParam,
+      );
+      return {
+        summary: selectedSummary,
+        days,
+        selectedDayIndex,
+        timezone: data.timezone,
+        apiPath: "/api/workout",
+        refreshPath: "/?refresh=1",
+        isLatest: selectedSummary === latestSummary,
+        selectedEventId: selectedSummary?.event.id,
+      };
+    };
+
+    const loadModule = async <T>(specifier: string): Promise<T> => {
+      const importer = new Function("m", "return import(m)") as (m: string) => Promise<T>;
+      return importer(specifier);
+    };
+    const { createServer: createViteServer } = await loadModule<typeof import("vite")>("vite");
+    const { default: solidPlugin } =
+      await loadModule<typeof import("vite-plugin-solid")>("vite-plugin-solid");
+    const webRoot = resolveWebRoot();
+    const template = await readFile(path.join(webRoot, "index.html"), "utf8");
+    const vite = await createViteServer({
+      root: webRoot,
+      appType: "custom",
+      server: {
+        middlewareMode: true,
+        fs: { allow: [path.join(webRoot, "..")] },
+      },
+      plugins: [solidPlugin()],
+    });
+
     const server = createServer(async (req, res) => {
       try {
         const url = new URL(req.url ?? "/", `http://${host}:${port}`);
@@ -450,47 +513,27 @@ export async function handleWorkout(
           return;
         }
 
-        if (url.pathname !== "/") {
-          res.statusCode = 404;
-          res.end("Not found");
+        if (url.pathname === "/") {
+          const pageData = await buildPageData(url, wantsRefresh);
+          const payload = JSON.stringify(pageData).replace(/</g, "\\u003c");
+          let html = template.replace("<!--workout-data-->", payload);
+          html = await vite.transformIndexHtml(url.pathname + url.search, html);
+          res.statusCode = 200;
+          res.setHeader("content-type", "text/html; charset=utf-8");
+          res.setHeader("cache-control", "no-store");
+          res.end(html);
           return;
         }
 
-        const data = await getSummary(wantsRefresh);
-        const dayParam = url.searchParams.get("day");
-        const eventParam = url.searchParams.get("event");
-        const annotatedEvents = annotateWorkoutEventSummaries(data.formatted.events);
-        const selectedSummary =
-          (eventParam
-            ? annotatedEvents.find(
-                (entry) => entry.event.id !== undefined && String(entry.event.id) === eventParam,
-              )
-            : undefined) ?? annotatedEvents[annotatedEvents.length - 1];
-        const latestSummary = annotatedEvents[annotatedEvents.length - 1];
-        const programUuid = selectedSummary?.program?.uuid;
-        const program = programUuid ? data.programDetails[programUuid] : undefined;
-        const days = summarizeWorkoutProgramDays(program);
-        const selectedDayIndex = resolveSelectedDayIndex(
-          days,
-          selectedSummary?.workout_day?.day_index,
-          selectedSummary?.workout_day?.day_label,
-          dayParam,
-        );
-        const html = renderWorkoutPage({
-          summary: selectedSummary,
-          days,
-          selectedDayIndex,
-          timezone: data.timezone,
-          apiPath: "/api/workout",
-          refreshPath: "/?refresh=1",
-          isLatest: selectedSummary === latestSummary,
-          selectedEventId: selectedSummary?.event.id,
+        vite.middlewares(req, res, (error) => {
+          if (error) {
+            throw error;
+          }
         });
-        res.statusCode = 200;
-        res.setHeader("content-type", "text/html; charset=utf-8");
-        res.setHeader("cache-control", "no-store");
-        res.end(html);
       } catch (error) {
+        if (error instanceof Error) {
+          vite.ssrFixStacktrace?.(error);
+        }
         res.statusCode = 500;
         res.setHeader("content-type", "text/plain; charset=utf-8");
         res.end(error instanceof Error ? error.message : "Server error");

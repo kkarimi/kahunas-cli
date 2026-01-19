@@ -23,6 +23,7 @@ const writeWorkoutCache = vi.fn();
 vi.mock("../config", () => ({
   AUTH_PATH: "/tmp/kahunas/auth.json",
   CONFIG_PATH: "/tmp/kahunas/config.json",
+  CACHE_DIR_PATH: "/tmp/kahunas/cache",
   WORKOUT_CACHE_PATH: "/tmp/kahunas/workouts.json",
   readConfig,
   readAuthConfig,
@@ -113,12 +114,6 @@ const loginAndPersist = vi.fn();
 vi.mock("../auth", () => ({
   captureWorkoutsFromBrowser,
   loginAndPersist,
-}));
-
-const renderWorkoutPage = vi.fn();
-
-vi.mock("../server/workout-view", () => ({
-  renderWorkoutPage,
 }));
 
 const printUsage = vi.fn();

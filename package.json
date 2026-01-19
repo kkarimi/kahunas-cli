@@ -15,11 +15,12 @@
   "files": [
     "ai-screenshot.png",
     "README.md",
-    "dist/cli.js"
+    "dist/cli.js",
+    "src/web"
   ],
   "main": "dist/cli.js",
   "scripts": {
-    "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --external playwright --tsconfig tsconfig.json",
+    "build": "rolldown src/cli.ts --file dist/cli.js --format cjs --platform node --inlineDynamicImports --external playwright --external vite --external vite-plugin-solid --external fsevents --tsconfig tsconfig.json",
     "kahunas": "node dist/cli.js",
     "lint": "pnpm typecheck",
     "lint:fmt": "pnpm lint:fix",
@@ -36,7 +37,10 @@
     "date-fns": "^4.1.0",
     "picocolors": "^1.1.1",
     "playwright": "^1.49.1",
-    "valibot": "^1.2.0"
+    "solid-js": "^1.8.22",
+    "valibot": "^1.2.0",
+    "vite": "^7.3.1",
+    "vite-plugin-solid": "^2.11.10"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
