@@ -567,7 +567,7 @@ export async function handleWorkout(
           return;
         }
 
-        vite.middlewares(req, res, (error) => {
+        vite.middlewares(req, res, (error: unknown) => {
           if (error) {
             throw error;
           }
