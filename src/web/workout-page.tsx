@@ -182,9 +182,7 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
                       {dateLabel}
                     </span>
                     <span class="text-[13px] font-semibold">{session.title ?? "Workout"}</span>
-                    {programLabel ? (
-                      <span class="text-xs text-muted">{programLabel}</span>
-                    ) : null}
+                    {programLabel ? <span class="text-xs text-muted">{programLabel}</span> : null}
                   </a>
                 );
               })}
