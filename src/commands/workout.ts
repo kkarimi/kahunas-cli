@@ -452,7 +452,45 @@ export async function handleWorkout(
       const programUuid = selectedSummary?.program?.uuid;
       const program = programUuid ? data.programDetails[programUuid] : undefined;
       const days = summarizeWorkoutProgramDays(program);
-      const dayDateMap = buildDayDateMap(annotatedEvents);
+      const programEvents = programUuid
+        ? annotatedEvents.filter((entry) => entry.program?.uuid === programUuid)
+        : annotatedEvents;
+      const dayDateMap = buildDayDateMap(programEvents, days);
+      const hasExercises = (
+        entry: ReturnType<typeof annotateWorkoutEventSummaries>[number],
+      ): boolean => {
+        const sections = entry.workout_day?.sections;
+        if (!sections?.length) {
+          return false;
+        }
+        for (const section of sections) {
+          for (const group of section.groups) {
+            if (group.exercises.length > 0) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      const sessions = annotatedEvents
+        .filter(
+          (entry) =>
+            entry.event.id !== undefined &&
+            typeof entry.event.start === "string" &&
+            hasExercises(entry),
+        )
+        .map((entry) => ({
+          id: entry.event.id!,
+          title: entry.event.title,
+          start: entry.event.start,
+          program: entry.program?.title ?? null,
+          programUuid: entry.program?.uuid,
+        }))
+        .sort((a, b) => {
+          const aTime = a.start ? Date.parse(a.start.replace(" ", "T")) : 0;
+          const bTime = b.start ? Date.parse(b.start.replace(" ", "T")) : 0;
+          return bTime - aTime;
+        });
       const selectedDayIndex = resolveSelectedDayIndex(
         days,
         selectedSummary?.workout_day?.day_index,
@@ -463,12 +501,14 @@ export async function handleWorkout(
         summary: selectedSummary,
         days,
         dayDateMap,
+        sessions,
         selectedDayIndex,
         timezone: data.timezone,
         apiPath: "/api/workout",
         refreshPath: "/?refresh=1",
         isLatest: selectedSummary === latestSummary,
         selectedEventId: selectedSummary?.event.id,
+        eventSelected: Boolean(eventParam),
       };
     };
 
@@ -566,21 +606,54 @@ export async function handleWorkout(
 
   const buildDayDateMap = (
     events: ReturnType<typeof annotateWorkoutEventSummaries>,
+    days: ReturnType<typeof summarizeWorkoutProgramDays>,
   ): Record<string, string> => {
     const map: Record<string, { time: number; label: string }> = {};
+
+    const normalize = (value: string): string => value.trim().toLowerCase();
+
+    const resolveDayIndex = (
+      dayIndex: number | undefined,
+      dayLabel: string | undefined,
+    ): number | undefined => {
+      if (dayIndex !== undefined) {
+        const matchIndex = days.findIndex((day) => day.day_index === dayIndex);
+        if (matchIndex >= 0) {
+          return matchIndex;
+        }
+        if (days[dayIndex]) {
+          return dayIndex;
+        }
+      }
+      if (dayLabel) {
+        const normalized = normalize(dayLabel);
+        const matchIndex = days.findIndex((day) => {
+          if (!day.day_label) {
+            return false;
+          }
+          const dayNormalized = normalize(day.day_label);
+          return dayNormalized.includes(normalized) || normalized.includes(dayNormalized);
+        });
+        if (matchIndex >= 0) {
+          return matchIndex;
+        }
+      }
+      return undefined;
+    };
+
     for (const entry of events) {
       const day = entry.workout_day;
-      const dayIndex = day?.day_index;
-      if (dayIndex === undefined || !day?.sections?.length) {
+      const resolvedIndex = resolveDayIndex(day?.day_index, day?.day_label);
+      if (resolvedIndex === undefined || !day?.sections?.length) {
         continue;
       }
       const latest = getLatestExerciseDateForDay(day);
       if (!latest) {
         continue;
       }
-      const current = map[String(dayIndex)];
+      const current = map[String(resolvedIndex)];
       if (!current || latest.time > current.time) {
-        map[String(dayIndex)] = latest;
+        map[String(resolvedIndex)] = latest;
       }
     }
     const output: Record<string, string> = {};

@@ -29,9 +29,12 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
     }
     return props.dayDateMap?.[String(index)];
   });
-  const headerDate = createMemo(() =>
-    resolvePerformedOnLabel(selectedDayDate() ?? latestSelected() ?? eventStart),
-  );
+  const headerDate = createMemo(() => {
+    if (props.eventSelected && eventStart) {
+      return resolvePerformedOnLabel(eventStart);
+    }
+    return resolvePerformedOnLabel(selectedDayDate() ?? latestSelected() ?? eventStart);
+  });
   const headerSubtitle = createMemo(() => {
     const dayLabel = selectedDayLabel();
     return dayLabel ? `${programTitle} • ${dayLabel}` : programTitle;
@@ -122,38 +125,68 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
         ) : null}
       </header>
 
-      {totalVolumeSets().length > 0 ? (
-        <section class="section">
-          <h2>Total Volume Sets</h2>
-          <div class="chips">
-            {totalVolumeSets().map((entry) => (
-              <span class="chip">
-                {entry.body_part} {formatNumber(entry.sets)}
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {selected()?.sections?.length ? (
-        selected()!.sections.map((section) => (
-          <section class="section">
-            <h2>{section.label}</h2>
-            <div class="section-body">
-              {section.groups.map((group, groupIndex) => (
-                <div class="group">
-                  {group.type === "superset" ? <div class="group-label">Superset</div> : null}
-                  {group.exercises.map((exercise, rowIndex) =>
-                    renderExerciseRow(exercise, groupIndex + rowIndex, performedOn),
-                  )}
-                </div>
-              ))}
+      <div class={`layout ${props.sessions?.length ? "with-sidebar" : ""}`.trim()}>
+        {props.sessions?.length ? (
+          <aside class="sidebar">
+            <div class="sidebar-title">Sessions</div>
+            <div class="session-list">
+              {props.sessions.map((session) => {
+                const isActive =
+                  props.selectedEventId !== undefined &&
+                  String(session.id) === String(props.selectedEventId);
+                const programLabel =
+                  session.program && session.program !== programTitle ? session.program : undefined;
+                const dateLabel = resolvePerformedOnLabel(session.start) ?? "Unknown date";
+                return (
+                  <a
+                    class={`session-item ${isActive ? "active" : ""}`.trim()}
+                    href={`/?event=${encodeURIComponent(String(session.id))}`}
+                  >
+                    <span class="session-date">{dateLabel}</span>
+                    <span class="session-title">{session.title ?? "Workout"}</span>
+                    {programLabel ? <span class="session-program">{programLabel}</span> : null}
+                  </a>
+                );
+              })}
             </div>
-          </section>
-        ))
-      ) : (
-        <div class="empty">No workout data found for this day.</div>
-      )}
+          </aside>
+        ) : null}
+
+        <div class="content">
+          {totalVolumeSets().length > 0 ? (
+            <section class="section">
+              <h2>Total Volume Sets</h2>
+              <div class="chips">
+                {totalVolumeSets().map((entry) => (
+                  <span class="chip">
+                    {entry.body_part} {formatNumber(entry.sets)}
+                  </span>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {selected()?.sections?.length ? (
+            selected()!.sections.map((section) => (
+              <section class="section">
+                <h2>{section.label}</h2>
+                <div class="section-body">
+                  {section.groups.map((group, groupIndex) => (
+                    <div class="group">
+                      {group.type === "superset" ? <div class="group-label">Superset</div> : null}
+                      {group.exercises.map((exercise, rowIndex) =>
+                        renderExerciseRow(exercise, groupIndex + rowIndex, performedOn),
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))
+          ) : (
+            <div class="empty">No workout data found for this day.</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

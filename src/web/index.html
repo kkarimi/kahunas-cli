@@ -144,6 +144,85 @@
         background: #f2fbf8;
       }
 
+      .layout {
+        margin-top: 28px;
+      }
+
+      .layout.with-sidebar {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      .content {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      .sidebar {
+        flex: 0 0 220px;
+        max-width: 220px;
+        background: var(--card);
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        padding: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .sidebar-title {
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+
+      .session-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .session-item {
+        display: grid;
+        gap: 4px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        text-decoration: none;
+        color: var(--ink);
+        background: #f7f9fc;
+        border: 1px solid transparent;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+
+      .session-item:hover {
+        border-color: #c7d7ea;
+        background: #f1f5fb;
+      }
+
+      .session-item.active {
+        border-color: var(--accent);
+        background: #f2fbf8;
+      }
+
+      .session-date {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .session-title {
+        font-weight: 600;
+        font-size: 13px;
+      }
+
+      .session-program {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
       .section {
         margin-top: 28px;
       }
@@ -288,6 +367,17 @@
       }
 
       @media (max-width: 720px) {
+        .layout.with-sidebar {
+          flex-direction: column;
+        }
+        .sidebar {
+          max-width: none;
+          width: 100%;
+          order: 2;
+        }
+        .content {
+          order: 1;
+        }
         .exercise {
           grid-template-columns: 48px 1fr;
         }
