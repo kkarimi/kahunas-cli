@@ -61,41 +61,65 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
   });
 
   const totalVolumeSets = createMemo(() => selected()?.total_volume_sets ?? []);
+  const hasSessions = Boolean(props.sessions?.length);
 
   return (
-    <div class="page">
-      <header class="hero">
+    <div class="mx-auto max-w-[1120px] px-6 pt-10 pb-[72px]">
+      <header class="grid gap-5 rounded-[28px] bg-card p-7 shadow-card">
         <div>
-          <div class="subtitle">{headerSubtitle()}</div>
-          <h1 class="title">{eventTitle}</h1>
-          <div class="meta">
-            {headerDate() ? <span class="meta-pill">{headerDate()}</span> : null}
-            <span class="meta-pill">{props.timezone}</span>
-            {props.isLatest ? <span class="meta-pill latest">Latest event</span> : null}
+          <div class="text-sm tracking-[0.02em] text-muted">{headerSubtitle()}</div>
+          <h1 class="font-display text-[32px] leading-tight text-ink">{eventTitle}</h1>
+          <div class="mt-3 flex flex-wrap items-center gap-3">
+            {headerDate() ? (
+              <span class="inline-flex items-center rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
+                {headerDate()}
+              </span>
+            ) : null}
+            <span class="inline-flex items-center rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
+              {props.timezone}
+            </span>
+            {props.isLatest ? (
+              <span class="inline-flex items-center rounded-full bg-ink px-3 py-1 text-xs font-semibold text-[#f5f7ff]">
+                Latest event
+              </span>
+            ) : null}
           </div>
         </div>
-        <div class="actions">
-          <a class="button" href={props.refreshPath}>
+        <div class="flex flex-wrap gap-3">
+          <a
+            class="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-semibold text-ink"
+            href={props.refreshPath}
+          >
             Refresh
           </a>
-          <a class="button" href={props.apiPath} target="_blank">
+          <a
+            class="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-semibold text-ink"
+            href={props.apiPath}
+            target="_blank"
+          >
             JSON
           </a>
         </div>
         {props.days.length > 0 ? (
-          <div class="tabs-block">
-            <div class="tabs-label">Program days</div>
-            <nav class="tabs">
+          <div class="grid gap-2 pt-3">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Program days
+            </div>
+            <nav class="flex flex-wrap gap-2 pt-2 pb-1">
               {props.days.map((day, index) => {
                 const label = day.day_label ?? `Day ${index + 1}`;
-                const active = index === selectedDayIndex() ? "active" : "";
+                const isActive = index === selectedDayIndex();
                 const eventParam =
                   props.selectedEventId !== undefined
                     ? `&event=${encodeURIComponent(String(props.selectedEventId))}`
                     : "";
                 return (
                   <a
-                    class={`tab ${active}`.trim()}
+                    class={`rounded-full border px-3.5 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? "border-accent bg-[#f2fbf8] text-accent"
+                        : "border-line bg-[#f9fbff] text-muted"
+                    }`.trim()}
                     href={`/?day=${index}${eventParam}`}
                     onClick={(event) => {
                       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -125,12 +149,20 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
         ) : null}
       </header>
 
-      <div class={`layout ${props.sessions?.length ? "with-sidebar" : ""}`.trim()}>
-        {props.sessions?.length ? (
-          <aside class="sidebar">
-            <div class="sidebar-title">Sessions</div>
-            <div class="session-list">
-              {props.sessions.map((session) => {
+      <div
+        class={
+          hasSessions
+            ? "mt-7 flex flex-col gap-6 min-[721px]:flex-row min-[721px]:items-start"
+            : "mt-7"
+        }
+      >
+        {hasSessions ? (
+          <aside class="w-full rounded-2xl border border-line bg-card p-4 shadow-card min-[721px]:w-[220px] min-[721px]:shrink-0">
+            <div class="mb-3 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+              Sessions
+            </div>
+            <div class="grid gap-2">
+              {props.sessions?.map((session) => {
                 const isActive =
                   props.selectedEventId !== undefined &&
                   String(session.id) === String(props.selectedEventId);
@@ -139,12 +171,20 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
                 const dateLabel = resolvePerformedOnLabel(session.start) ?? "Unknown date";
                 return (
                   <a
-                    class={`session-item ${isActive ? "active" : ""}`.trim()}
+                    class={`grid gap-1 rounded-xl border px-3 py-2 text-ink transition-colors ${
+                      isActive
+                        ? "border-accent bg-[#f2fbf8]"
+                        : "border-transparent bg-[#f7f9fc] hover:border-[#c7d7ea] hover:bg-[#f1f5fb]"
+                    }`.trim()}
                     href={`/?event=${encodeURIComponent(String(session.id))}`}
                   >
-                    <span class="session-date">{dateLabel}</span>
-                    <span class="session-title">{session.title ?? "Workout"}</span>
-                    {programLabel ? <span class="session-program">{programLabel}</span> : null}
+                    <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      {dateLabel}
+                    </span>
+                    <span class="text-[13px] font-semibold">{session.title ?? "Workout"}</span>
+                    {programLabel ? (
+                      <span class="text-xs text-muted">{programLabel}</span>
+                    ) : null}
                   </a>
                 );
               })}
@@ -152,13 +192,13 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
           </aside>
         ) : null}
 
-        <div class="content">
+        <div class={hasSessions ? "min-w-0 flex-1" : ""}>
           {totalVolumeSets().length > 0 ? (
-            <section class="section">
-              <h2>Total Volume Sets</h2>
-              <div class="chips">
+            <section class="mt-7">
+              <h2 class="text-lg font-bold">Total Volume Sets</h2>
+              <div class="mt-3 flex flex-wrap gap-2">
                 {totalVolumeSets().map((entry) => (
-                  <span class="chip">
+                  <span class="rounded-full bg-[#e9f7f2] px-3 py-1.5 text-xs font-semibold text-accent">
                     {entry.body_part} {formatNumber(entry.sets)}
                   </span>
                 ))}
@@ -168,12 +208,16 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
 
           {selected()?.sections?.length ? (
             selected()!.sections.map((section) => (
-              <section class="section">
-                <h2>{section.label}</h2>
-                <div class="section-body">
+              <section class="mt-7">
+                <h2 class="text-lg font-bold">{section.label}</h2>
+                <div class="grid gap-3.5">
                   {section.groups.map((group, groupIndex) => (
-                    <div class="group">
-                      {group.type === "superset" ? <div class="group-label">Superset</div> : null}
+                    <div class="grid gap-2.5">
+                      {group.type === "superset" ? (
+                        <div class="pl-1 text-[11px] uppercase tracking-[0.1em] text-muted">
+                          Superset
+                        </div>
+                      ) : null}
                       {group.exercises.map((exercise, rowIndex) =>
                         renderExerciseRow(exercise, groupIndex + rowIndex, performedOn),
                       )}
@@ -183,7 +227,9 @@ function WorkoutPage(props: WorkoutPageData): JSX.Element {
               </section>
             ))
           ) : (
-            <div class="empty">No workout data found for this day.</div>
+            <div class="mt-5 rounded-2xl border border-dashed border-line bg-white/60 p-6 text-sm text-muted">
+              No workout data found for this day.
+            </div>
           )}
         </div>
       </div>
@@ -222,17 +268,24 @@ function renderExerciseRow(
     .filter(Boolean)
     .join(" | ");
   return (
-    <div class="exercise" style={`--delay: ${Math.min(index * 0.04, 0.4)}s`}>
-      <div class="badge">
-        <span>{badge}</span>
-        <span class="badge-label">Order</span>
+    <div
+      class="grid grid-cols-[56px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-card p-4 shadow-[0_4px_16px_rgba(31,36,48,0.04)] animate-fade-slide max-[720px]:grid-cols-[48px_1fr]"
+      style={`animation-delay: ${Math.min(index * 0.04, 0.4)}s`}
+    >
+      <div class="grid h-[46px] w-[46px] place-items-center gap-0.5 rounded-[14px] bg-chip text-center text-sm font-bold text-[#275b8b]">
+        <span class="leading-none">{badge}</span>
+        <span class="text-[9px] uppercase tracking-[0.08em] opacity-70">Order</span>
       </div>
       <div>
-        <h3>{exercise.name}</h3>
-        <p>{metrics || "No prescription"}</p>
+        <h3 class="text-base font-bold">{exercise.name}</h3>
+        <p class="mt-1 text-sm text-muted">{metrics || "No prescription"}</p>
       </div>
-      <div class="metrics">
-        {dateLabel ? <span class="date-pill">{dateLabel}</span> : null}
+      <div class="grid min-w-[140px] justify-items-end gap-1.5 text-xs text-muted max-[720px]:justify-items-start max-[720px]:text-left">
+        {dateLabel ? (
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-chip px-2.5 py-1 text-[11px] font-semibold text-[#1c3b57]">
+            {dateLabel}
+          </span>
+        ) : null}
         {exercise.body_parts?.length ? formatBodyParts(exercise.body_parts) : null}
       </div>
     </div>

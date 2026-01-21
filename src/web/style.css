@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    margin: 0;
+    color: #1f2430;
+    font-family: "Spline Sans", system-ui, sans-serif;
+    background: linear-gradient(160deg, #f6f7fb, #eef3f9);
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(47, 127, 111, 0.12), transparent 45%);
+    pointer-events: none;
+  }
+}
