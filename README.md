@@ -24,7 +24,7 @@ pnpm build
 
 ```bash
 pnpm kahunas sync
-pnpm kahunas serve
+pnpm serve
 ```
 
 Open `http://127.0.0.1:3000`.
