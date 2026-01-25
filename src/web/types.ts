@@ -10,7 +10,10 @@ type WorkoutPageData = {
     start?: string;
     program?: string | null;
     programUuid?: string;
+    dayIndex?: number;
+    dayLabel?: string;
   }>;
+  summaryDayIndex?: number;
   selectedDayIndex?: number;
   timezone: string;
   apiPath: string;

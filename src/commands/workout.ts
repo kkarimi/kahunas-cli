@@ -336,10 +336,159 @@ export async function handleWorkout(
     return programDetails;
   };
 
+  const normalizeDayLabel = (value: string): string => value.trim().toLowerCase();
+
+  const parseDayIndexFromTitle = (value: string | undefined): number | undefined => {
+    if (!value) {
+      return undefined;
+    }
+    const dayMatch = value.match(/\bday\s*(\d+)/i);
+    if (dayMatch) {
+      const parsed = Number.parseInt(dayMatch[1], 10);
+      return Number.isFinite(parsed) ? parsed - 1 : undefined;
+    }
+    const trailingMatch = value.match(/(\d+)\s*$/);
+    if (trailingMatch) {
+      const parsed = Number.parseInt(trailingMatch[1], 10);
+      return Number.isFinite(parsed) ? parsed - 1 : undefined;
+    }
+    return undefined;
+  };
+
+  const deriveFocusLabel = (
+    title: string | undefined,
+    fallback: string | undefined,
+  ): string | undefined => {
+    const raw = (title ?? fallback ?? "").trim();
+    if (!raw) {
+      return undefined;
+    }
+    let cleaned = raw.replace(/\s+/g, " ").trim();
+    cleaned = cleaned.replace(/^day\s*\d+\s*[:\-]\s*/i, "");
+    cleaned = cleaned.replace(/^workout\s*[:\-]\s*/i, "Workout ");
+    cleaned = cleaned.replace(/\s+\d+\s*$/, "");
+    cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+    return cleaned || raw;
+  };
+
+  const resolveDayIndexForSummary = (
+    days: ReturnType<typeof summarizeWorkoutProgramDays>,
+    dayIndex: number | undefined,
+    dayLabel: string | undefined,
+  ): number | undefined => {
+    if (dayIndex !== undefined) {
+      const matchIndex = days.findIndex((day) => day.day_index === dayIndex);
+      if (matchIndex >= 0) {
+        return matchIndex;
+      }
+      if (days[dayIndex]) {
+        return dayIndex;
+      }
+    }
+    if (dayLabel) {
+      const normalized = normalizeDayLabel(dayLabel);
+      const matches = days.flatMap((day, index) => {
+        if (!day.day_label) {
+          return [];
+        }
+        const dayNormalized = normalizeDayLabel(day.day_label);
+        if (dayNormalized.includes(normalized) || normalized.includes(dayNormalized)) {
+          return [index];
+        }
+        return [];
+      });
+      if (matches.length === 1) {
+        return matches[0];
+      }
+    }
+    return undefined;
+  };
+
+  const hasExercises = (
+    entry: ReturnType<typeof annotateWorkoutEventSummaries>[number],
+  ): boolean => {
+    const sections = entry.workout_day?.sections;
+    if (!sections?.length) {
+      return false;
+    }
+    for (const section of sections) {
+      for (const group of section.groups) {
+        if (group.exercises.length > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const summarizeSessionFocuses = (
+    events: ReturnType<typeof annotateWorkoutEventSummaries>,
+  ): ReturnType<typeof summarizeWorkoutProgramDays> => {
+    const focusMap = new Map<
+      string,
+      {
+        label: string;
+        summary: ReturnType<typeof annotateWorkoutEventSummaries>[number];
+        latestTime: number;
+        minIndex?: number;
+      }
+    >();
+    for (const entry of events) {
+      const day = entry.workout_day ?? {
+        day_index: undefined,
+        day_label: undefined,
+        total_volume_sets: [],
+        sections: [],
+      };
+      const summary =
+        entry.workout_day !== null ? entry : { ...entry, workout_day: day };
+      const label = deriveFocusLabel(
+        typeof entry.event.title === "string" ? entry.event.title : undefined,
+        day.day_label,
+      );
+      if (!label) {
+        continue;
+      }
+      const key = normalizeDayLabel(label);
+      const time = entry.event.start ? Date.parse(entry.event.start.replace(" ", "T")) : 0;
+      const indexHint = parseDayIndexFromTitle(entry.event.title as string | undefined);
+      const existing = focusMap.get(key);
+      if (!existing || time > existing.latestTime) {
+        focusMap.set(key, {
+          label,
+          summary,
+          latestTime: time,
+          minIndex: existing?.minIndex ?? indexHint,
+        });
+        continue;
+      }
+      if (indexHint !== undefined) {
+        const currentMin = existing.minIndex;
+        if (currentMin === undefined || indexHint < currentMin) {
+          existing.minIndex = indexHint;
+        }
+      }
+    }
+    if (focusMap.size === 0) {
+      return [];
+    }
+    const sorted = [...focusMap.values()].sort((a, b) => {
+      if (a.minIndex !== undefined && b.minIndex !== undefined && a.minIndex !== b.minIndex) {
+        return a.minIndex - b.minIndex;
+      }
+      return a.label.localeCompare(b.label);
+    });
+    return sorted.map((entry) => ({
+      ...entry.summary.workout_day!,
+      day_index: undefined,
+      day_label: entry.label,
+    }));
+  };
+
   const startWorkoutServer = async (): Promise<void> => {
     const host = "127.0.0.1";
     const port = 3000;
-    const limit = 30;
+    const limit = 0;
     const cacheTtlMs = 30_000;
 
     const loadSummary = async (
@@ -437,64 +586,132 @@ export async function handleWorkout(
       return path.join(__dirname, "..", "src", "web");
     };
 
+    const resolveDayParamIndex = (
+      dayParam: string | null,
+      days: ReturnType<typeof summarizeWorkoutProgramDays>,
+    ): number | undefined => {
+      if (!dayParam) {
+        return undefined;
+      }
+      const parsed = Number.parseInt(dayParam, 10);
+      if (!Number.isFinite(parsed)) {
+        return undefined;
+      }
+      return days[parsed] ? parsed : undefined;
+    };
+
+    const pickLatestSummaryForDay = (
+      events: ReturnType<typeof annotateWorkoutEventSummaries>,
+      days: ReturnType<typeof summarizeWorkoutProgramDays>,
+      dayIndex: number,
+    ): ReturnType<typeof annotateWorkoutEventSummaries>[number] | undefined => {
+      let fallback: ReturnType<typeof annotateWorkoutEventSummaries>[number] | undefined;
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        const entry = events[i];
+        if (!entry) {
+          continue;
+        }
+        const focusLabel = deriveFocusLabel(
+          typeof entry.event.title === "string" ? entry.event.title : undefined,
+          entry.workout_day?.day_label,
+        );
+        const resolved = resolveDayIndexForSummary(
+          days,
+          entry.workout_day?.day_index,
+          focusLabel ?? entry.workout_day?.day_label,
+        );
+        if (resolved === dayIndex) {
+          if (hasExercises(entry)) {
+            return entry;
+          }
+          if (!fallback) {
+            fallback = entry;
+          }
+        }
+      }
+      return fallback;
+    };
+
     const buildPageData = async (url: URL, wantsRefresh: boolean): Promise<WorkoutPageData> => {
       const data = await getSummary(wantsRefresh);
       const dayParam = url.searchParams.get("day");
       const eventParam = url.searchParams.get("event");
       const annotatedEvents = annotateWorkoutEventSummaries(data.formatted.events);
-      const selectedSummary =
-        (eventParam
-          ? annotatedEvents.find(
-              (entry) => entry.event.id !== undefined && String(entry.event.id) === eventParam,
-            )
-          : undefined) ?? annotatedEvents[annotatedEvents.length - 1];
       const latestSummary = annotatedEvents[annotatedEvents.length - 1];
-      const programUuid = selectedSummary?.program?.uuid;
+      const eventSummary = eventParam
+        ? annotatedEvents.find(
+            (entry) => entry.event.id !== undefined && String(entry.event.id) === eventParam,
+          )
+        : undefined;
+      const baseSummary = eventSummary ?? latestSummary;
+      const programUuid = baseSummary?.program?.uuid;
       const program = programUuid ? data.programDetails[programUuid] : undefined;
-      const days = summarizeWorkoutProgramDays(program);
-      const programEvents = programUuid
-        ? annotatedEvents.filter((entry) => entry.program?.uuid === programUuid)
-        : annotatedEvents;
+      const programEvents = annotatedEvents;
+      const programDays = summarizeWorkoutProgramDays(program);
+      const focusDays = summarizeSessionFocuses(programEvents);
+      const days = focusDays.length > 0 ? focusDays : programDays;
+      const dayParamIndex = resolveDayParamIndex(dayParam, days);
+      const selectedSummary =
+        eventSummary ??
+        (dayParamIndex !== undefined
+          ? pickLatestSummaryForDay(programEvents, days, dayParamIndex)
+          : undefined) ??
+        latestSummary;
       const dayDateMap = buildDayDateMap(programEvents, days);
-      const hasExercises = (
-        entry: ReturnType<typeof annotateWorkoutEventSummaries>[number],
-      ): boolean => {
-        const sections = entry.workout_day?.sections;
-        if (!sections?.length) {
-          return false;
-        }
-        for (const section of sections) {
-          for (const group of section.groups) {
-            if (group.exercises.length > 0) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-      const sessions = annotatedEvents
+      const sessions = programEvents
         .filter(
           (entry) =>
             entry.event.id !== undefined &&
-            typeof entry.event.start === "string" &&
-            hasExercises(entry),
+            typeof entry.event.start === "string",
         )
-        .map((entry) => ({
-          id: entry.event.id!,
-          title: entry.event.title,
-          start: entry.event.start,
-          program: entry.program?.title ?? null,
-          programUuid: entry.program?.uuid,
-        }))
+        .map((entry) => {
+          const focusLabel = deriveFocusLabel(
+            typeof entry.event.title === "string" ? entry.event.title : undefined,
+            entry.workout_day?.day_label,
+          );
+          const dayIndex = resolveDayIndexForSummary(
+            days,
+            entry.workout_day?.day_index,
+            focusLabel ?? entry.workout_day?.day_label,
+          );
+          const dayLabel =
+            dayIndex !== undefined
+              ? days[dayIndex]?.day_label
+              : focusLabel ?? entry.workout_day?.day_label;
+          return {
+            id: entry.event.id!,
+            title: entry.event.title,
+            start: entry.event.start,
+            program: entry.program?.title ?? null,
+            programUuid: entry.program?.uuid,
+            dayIndex,
+            dayLabel,
+          };
+        })
         .sort((a, b) => {
           const aTime = a.start ? Date.parse(a.start.replace(" ", "T")) : 0;
           const bTime = b.start ? Date.parse(b.start.replace(" ", "T")) : 0;
           return bTime - aTime;
         });
+      const summaryDayIndex = resolveDayIndexForSummary(
+        days,
+        selectedSummary?.workout_day?.day_index,
+        deriveFocusLabel(
+          typeof selectedSummary?.event.title === "string"
+            ? selectedSummary.event.title
+            : undefined,
+          selectedSummary?.workout_day?.day_label,
+        ) ?? selectedSummary?.workout_day?.day_label,
+      );
       const selectedDayIndex = resolveSelectedDayIndex(
         days,
         selectedSummary?.workout_day?.day_index,
-        selectedSummary?.workout_day?.day_label,
+        deriveFocusLabel(
+          typeof selectedSummary?.event.title === "string"
+            ? selectedSummary.event.title
+            : undefined,
+          selectedSummary?.workout_day?.day_label,
+        ) ?? selectedSummary?.workout_day?.day_label,
         dayParam,
       );
       return {
@@ -502,6 +719,7 @@ export async function handleWorkout(
         days,
         dayDateMap,
         sessions,
+        summaryDayIndex,
         selectedDayIndex,
         timezone: data.timezone,
         apiPath: "/api/workout",
@@ -610,40 +828,17 @@ export async function handleWorkout(
   ): Record<string, string> => {
     const map: Record<string, { time: number; label: string }> = {};
 
-    const normalize = (value: string): string => value.trim().toLowerCase();
-
-    const resolveDayIndex = (
-      dayIndex: number | undefined,
-      dayLabel: string | undefined,
-    ): number | undefined => {
-      if (dayIndex !== undefined) {
-        const matchIndex = days.findIndex((day) => day.day_index === dayIndex);
-        if (matchIndex >= 0) {
-          return matchIndex;
-        }
-        if (days[dayIndex]) {
-          return dayIndex;
-        }
-      }
-      if (dayLabel) {
-        const normalized = normalize(dayLabel);
-        const matchIndex = days.findIndex((day) => {
-          if (!day.day_label) {
-            return false;
-          }
-          const dayNormalized = normalize(day.day_label);
-          return dayNormalized.includes(normalized) || normalized.includes(dayNormalized);
-        });
-        if (matchIndex >= 0) {
-          return matchIndex;
-        }
-      }
-      return undefined;
-    };
-
     for (const entry of events) {
       const day = entry.workout_day;
-      const resolvedIndex = resolveDayIndex(day?.day_index, day?.day_label);
+      const focusLabel = deriveFocusLabel(
+        typeof entry.event.title === "string" ? entry.event.title : undefined,
+        day?.day_label,
+      );
+      const resolvedIndex = resolveDayIndexForSummary(
+        days,
+        day?.day_index,
+        focusLabel ?? day?.day_label,
+      );
       if (resolvedIndex === undefined || !day?.sections?.length) {
         continue;
       }

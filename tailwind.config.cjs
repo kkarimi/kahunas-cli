@@ -3,18 +3,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg1: "#f6f7fb",
-        bg2: "#eef3f9",
-        card: "#ffffff",
-        ink: "#1f2430",
-        muted: "#6b7280",
-        line: "#e3e8f2",
-        accent: "#2f7f6f",
-        "accent-soft": "#e7f5f1",
-        chip: "#eaf5ff",
+        bg1: "#fbf6f0",
+        bg2: "#eef4ff",
+        card: "#fffdf9",
+        ink: "#1e1a2b",
+        muted: "#5f6b7a",
+        line: "#e1e6f0",
+        accent: "#e85d3f",
+        "accent-strong": "#c7462d",
+        "accent-soft": "#ffe1d6",
+        chip: "#e9f1ff",
+        "chip-ink": "#1d3760",
       },
       boxShadow: {
-        card: "0 12px 30px rgba(31, 36, 48, 0.08)",
+        card: "0 18px 40px rgba(30, 26, 43, 0.12)",
       },
       fontFamily: {
         sans: ["Spline Sans", "system-ui", "sans-serif"],

@@ -1,11 +1,25 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --bg-cream: #fbf6f0;
+    --bg-sky: #eef4ff;
+    --bg-mint: #e8faf4;
+    --glow-coral: rgba(232, 93, 63, 0.22);
+    --glow-sky: rgba(90, 160, 255, 0.2);
+    --glow-mint: rgba(80, 198, 153, 0.18);
+    --ink: #1e1a2b;
+  }
+
   body {
     margin: 0;
-    color: #1f2430;
+    color: var(--ink);
     font-family: "Spline Sans", system-ui, sans-serif;
-    background: linear-gradient(160deg, #f6f7fb, #eef3f9);
+    background:
+      radial-gradient(circle at 15% 20%, var(--glow-coral), transparent 45%),
+      radial-gradient(circle at 85% 10%, var(--glow-sky), transparent 40%),
+      radial-gradient(circle at 50% 85%, var(--glow-mint), transparent 35%),
+      linear-gradient(160deg, var(--bg-cream), var(--bg-sky) 55%, var(--bg-mint));
     min-height: 100vh;
   }
 
@@ -13,7 +27,24 @@
     content: "";
     position: fixed;
     inset: 0;
-    background: radial-gradient(circle at top right, rgba(47, 127, 111, 0.12), transparent 45%);
+    background-image: radial-gradient(rgba(255, 255, 255, 0.7) 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.35;
+    mix-blend-mode: soft-light;
     pointer-events: none;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: -15%;
+    background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.6), transparent 55%);
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
   }
 }

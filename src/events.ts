@@ -46,20 +46,118 @@ export function summarizeWorkoutProgramDays(program: unknown): WorkoutDaySummary
   if (candidates.length === 0) {
     return [];
   }
-  const seen = new Set<string>();
-  const unique: WorkoutDaySummary[] = [];
+  const normalizeLabel = (value: string): string => value.trim().toLowerCase();
+  const resolveCandidateIndex = (candidate: WorkoutDaySummary): number | undefined => {
+    const parsedFromLabel = candidate.day_label
+      ? parseDayIndexFromTitle(candidate.day_label)
+      : undefined;
+    if (candidate.day_index !== undefined) {
+      if (
+        parsedFromLabel !== undefined &&
+        Math.abs(candidate.day_index - parsedFromLabel) === 1
+      ) {
+        return parsedFromLabel;
+      }
+      return candidate.day_index;
+    }
+    return parsedFromLabel;
+  };
+  const countExercises = (candidate: WorkoutDaySummary): number => {
+    let total = 0;
+    for (const section of candidate.sections) {
+      for (const group of section.groups) {
+        total += group.exercises.length;
+      }
+    }
+    return total;
+  };
+  const choosePreferred = (
+    current: WorkoutDaySummary,
+    next: WorkoutDaySummary,
+  ): WorkoutDaySummary => {
+    const currentExercises = countExercises(current);
+    const nextExercises = countExercises(next);
+    if (nextExercises !== currentExercises) {
+      return nextExercises > currentExercises ? next : current;
+    }
+    const currentSections = current.sections.length;
+    const nextSections = next.sections.length;
+    if (nextSections !== currentSections) {
+      return nextSections > currentSections ? next : current;
+    }
+    const currentLabel = current.day_label ?? "";
+    const nextLabel = next.day_label ?? "";
+    if (currentLabel && !nextLabel) {
+      return current;
+    }
+    if (!currentLabel && nextLabel) {
+      return next;
+    }
+    if (nextLabel.length > currentLabel.length) {
+      return next;
+    }
+    return current;
+  };
+  const byIndex = new Map<number, WorkoutDaySummary>();
+  const byLabel = new Map<string, WorkoutDaySummary>();
+  const misc: WorkoutDaySummary[] = [];
+  const matchesSeenLabel = (label: string, seen: Set<string>): boolean => {
+    const normalized = normalizeLabel(label);
+    for (const entry of seen) {
+      if (entry.includes(normalized) || normalized.includes(entry)) {
+        return true;
+      }
+    }
+    return false;
+  };
   for (const candidate of candidates) {
-    const key = [
-      candidate.day_index ?? "none",
-      candidate.day_label ?? "unknown",
-      candidate.sections.length,
-    ].join("|");
-    if (seen.has(key)) {
+    const resolvedIndex = resolveCandidateIndex(candidate);
+    const normalized = candidate.day_label ? normalizeLabel(candidate.day_label) : undefined;
+    const normalizedCandidate =
+      resolvedIndex !== undefined && candidate.day_index === undefined
+        ? { ...candidate, day_index: resolvedIndex }
+        : candidate;
+    if (resolvedIndex !== undefined) {
+      const existing = byIndex.get(resolvedIndex);
+      byIndex.set(
+        resolvedIndex,
+        existing ? choosePreferred(existing, normalizedCandidate) : normalizedCandidate,
+      );
       continue;
     }
-    seen.add(key);
-    unique.push(candidate);
+    if (normalized) {
+      const existing = byLabel.get(normalized);
+      byLabel.set(
+        normalized,
+        existing ? choosePreferred(existing, normalizedCandidate) : normalizedCandidate,
+      );
+      continue;
+    }
+    misc.push(normalizedCandidate);
   }
+  const unique: WorkoutDaySummary[] = [];
+  const seenLabels = new Set<string>();
+  const sortedIndices = [...byIndex.keys()].sort((a, b) => a - b);
+  for (const index of sortedIndices) {
+    const entry = byIndex.get(index);
+    if (!entry) {
+      continue;
+    }
+    unique.push(entry);
+    if (entry.day_label) {
+      seenLabels.add(normalizeLabel(entry.day_label));
+    }
+  }
+  for (const entry of byLabel.values()) {
+    if (entry.day_label && matchesSeenLabel(entry.day_label, seenLabels)) {
+      continue;
+    }
+    unique.push(entry);
+    if (entry.day_label) {
+      seenLabels.add(normalizeLabel(entry.day_label));
+    }
+  }
+  unique.push(...misc);
   return unique.sort((a, b) => {
     const aIndex = a.day_index;
     const bIndex = b.day_index;

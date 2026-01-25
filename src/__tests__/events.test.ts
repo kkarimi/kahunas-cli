@@ -6,6 +6,7 @@ import {
   filterWorkoutEvents,
   formatWorkoutEventsOutput,
   parseWorkoutDayPreview,
+  summarizeWorkoutProgramDays,
   sortWorkoutEvents,
 } from "../events";
 
@@ -238,5 +239,31 @@ describe("formatWorkoutEventsOutput", () => {
     expect(exercise?.uuid).toBe("ex-1");
     expect(exercise?.sets).toBe(4);
     expect(exercise?.reps).toBe("8-10");
+  });
+});
+
+describe("summarizeWorkoutProgramDays", () => {
+  it("merges duplicate day labels and resolves day index from title", () => {
+    const program = {
+      days: [
+        {
+          day_number: 0,
+          title: "Day 1: Anterior",
+          workout: [{ exercise_name: "Bench Press", sets: 3, reps: "8" }],
+        },
+      ],
+      workout_plan: {
+        workout_days: [
+          {
+            title: "Anterior",
+            workout: [{ exercise_name: "Incline Press", sets: 3, reps: "8" }],
+          },
+        ],
+      },
+    };
+    const days = summarizeWorkoutProgramDays(program);
+    expect(days).toHaveLength(1);
+    expect(days[0]?.day_index).toBe(0);
+    expect(days[0]?.day_label).toMatch(/Anterior/i);
   });
 });
