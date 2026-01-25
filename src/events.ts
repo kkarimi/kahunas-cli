@@ -52,10 +52,7 @@ export function summarizeWorkoutProgramDays(program: unknown): WorkoutDaySummary
       ? parseDayIndexFromTitle(candidate.day_label)
       : undefined;
     if (candidate.day_index !== undefined) {
-      if (
-        parsedFromLabel !== undefined &&
-        Math.abs(candidate.day_index - parsedFromLabel) === 1
-      ) {
+      if (parsedFromLabel !== undefined && Math.abs(candidate.day_index - parsedFromLabel) === 1) {
         return parsedFromLabel;
       }
       return candidate.day_index;

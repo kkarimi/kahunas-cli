@@ -440,8 +440,7 @@ export async function handleWorkout(
         total_volume_sets: [],
         sections: [],
       };
-      const summary =
-        entry.workout_day !== null ? entry : { ...entry, workout_day: day };
+      const summary = entry.workout_day !== null ? entry : { ...entry, workout_day: day };
       const label = deriveFocusLabel(
         typeof entry.event.title === "string" ? entry.event.title : undefined,
         day.day_label,
@@ -659,11 +658,7 @@ export async function handleWorkout(
         latestSummary;
       const dayDateMap = buildDayDateMap(programEvents, days);
       const sessions = programEvents
-        .filter(
-          (entry) =>
-            entry.event.id !== undefined &&
-            typeof entry.event.start === "string",
-        )
+        .filter((entry) => entry.event.id !== undefined && typeof entry.event.start === "string")
         .map((entry) => {
           const focusLabel = deriveFocusLabel(
             typeof entry.event.title === "string" ? entry.event.title : undefined,
@@ -677,7 +672,7 @@ export async function handleWorkout(
           const dayLabel =
             dayIndex !== undefined
               ? days[dayIndex]?.day_label
-              : focusLabel ?? entry.workout_day?.day_label;
+              : (focusLabel ?? entry.workout_day?.day_label);
           return {
             id: entry.event.id!,
             title: entry.event.title,

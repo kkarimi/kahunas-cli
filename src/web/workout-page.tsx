@@ -332,7 +332,10 @@ function resolvePerformedOnLabel(value: string | undefined): string | undefined 
   return match ? match[1] : value;
 }
 
-function formatDayLabel(dayLabel: string | undefined, dayIndex: number | undefined): string | undefined {
+function formatDayLabel(
+  dayLabel: string | undefined,
+  dayIndex: number | undefined,
+): string | undefined {
   const label = dayLabel?.trim();
   if (label) {
     return label;
